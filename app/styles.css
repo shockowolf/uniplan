@@ -405,8 +405,26 @@ th { color: var(--muted); font-size: 13px; }
   border-radius: 12px;
   padding: 8px 10px;
 }
+.erp-column-chooser {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--line);
+  background: rgba(7, 17, 31, .42);
+}
+.erp-column-chooser label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 13px;
+}
 .erp-grid-scroll {
   overflow-x: auto;
+}
+th {
+  position: relative;
 }
 .erp-grid-sort {
   display: inline-flex;
@@ -434,9 +452,71 @@ th { color: var(--muted); font-size: 13px; }
   outline: 1px dashed var(--accent);
   outline-offset: -5px;
 }
+.erp-grid-resizer {
+  position: absolute;
+  top: 0;
+  right: -2px;
+  width: 6px;
+  height: 100%;
+  cursor: col-resize;
+  user-select: none;
+}
+.erp-grid-filter-row th {
+  padding: 8px;
+}
+.erp-grid-filter-row input,
+.erp-grid-filter-row select {
+  width: 100%;
+  min-width: 96px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: rgba(7, 17, 31, .65);
+  color: var(--text);
+  padding: 7px 8px;
+}
+.erp-grid-filter-row select {
+  margin-top: 6px;
+}
+.erp-grid-selected-row td {
+  background: rgba(95, 211, 255, .08);
+}
+.erp-grid-select-col,
+.erp-grid-action-col {
+  width: 72px;
+}
+.erp-grid-row-select {
+  width: 52px;
+  text-align: center;
+}
 .erp-grid-row-action {
   width: 72px;
   text-align: center;
+}
+tfoot td {
+  color: var(--accent);
+  font-weight: 700;
+  background: rgba(7, 17, 31, .5);
+}
+.erp-grid-pager {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 14px;
+  border-top: 1px solid var(--line);
+}
+.erp-grid-pager button,
+.erp-grid-pager select {
+  min-height: 36px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(7, 17, 31, .65);
+  color: var(--text);
+  padding: 7px 10px;
+}
+.erp-grid-pager button:disabled {
+  cursor: not-allowed;
+  opacity: .45;
 }
 .cell-center { display: block; text-align: center; }
 .cell-right { display: block; text-align: right; }
