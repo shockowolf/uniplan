@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { AppSidebar } from '@/components/AppSidebar';
 import './styles.css';
 
 export const metadata: Metadata = {
@@ -9,7 +10,12 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="ko">
-      <body>{children}</body>
+      <body>
+        <main className="dashboard-shell">
+          <AppSidebar />
+          {children}
+        </main>
+      </body>
     </html>
   );
 }
