@@ -10,6 +10,7 @@
 - Read `README.md` first.
 - Read `UNIPLAN_MOVE_BRIEF.md` before making changes.
 - Use `UNIPLAN_MVP.md`, `UNIPLAN_ARCHITECTURE.md`, and `UNIPLAN_DATA_MODEL.md` as the core product/technical context.
+- Use `docs/EASIERP_DB_REFERENCE.md` when mapping legacy easiERP/gootzERP database structures into Uniplan.
 - For implementation, start with `app/page.tsx`, `app/api/chat/route.ts`, and `lib/ai/orchestrator.ts`.
 
 ## Working Rules

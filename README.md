@@ -73,6 +73,7 @@ Product and architecture:
 Prototype docs:
 
 - `docs/DEMO_SCRIPT.md`
+- `docs/EASIERP_DB_REFERENCE.md`
 - `docs/POSTGRES_MIGRATION.md`
 - `docs/LLM_INTENT_CLASSIFIER.md`
 
