@@ -54,18 +54,19 @@ export function AppSidebar({ menuItems }: AppSidebarProps) {
           const hasChildren = Boolean(item.children?.length);
           const childActive = item.children?.some((child) => isActive(child.href)) ?? false;
           const isOpen = openGroupKey === item.href;
+          const itemActive = isActive(item.href) || childActive;
 
           return (
             <div className={hasChildren ? 'nav-group' : undefined} key={`${item.href}-${item.label}`}>
               {hasChildren ? (
                 <button
                   aria-expanded={isOpen}
-                  className={isActive(item.href) || childActive || isOpen ? 'nav-link nav-toggle active' : 'nav-link nav-toggle'}
+                  className={itemActive ? 'nav-link nav-toggle active' : isOpen ? 'nav-link nav-toggle open' : 'nav-link nav-toggle'}
                   onClick={() => setOpenGroupKey(isOpen ? null : item.href)}
                   type="button"
                 >
-                  <span className="nav-label">{item.label}</span>
                   <span aria-hidden="true" className={isOpen ? 'nav-caret open' : 'nav-caret'} />
+                  <span className="nav-label">{item.label}</span>
                 </button>
               ) : (
                 <Link className={isActive(item.href) ? 'nav-link active' : 'nav-link'} href={item.href}>
