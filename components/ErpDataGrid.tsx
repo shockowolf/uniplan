@@ -58,6 +58,7 @@ export function ErpDataGrid<TData extends Record<string, string | number | null 
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>(initialColumnVisibility);
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
   const [showColumnChooser, setShowColumnChooser] = useState(false);
+  const [showFilterRow, setShowFilterRow] = useState(false);
   const [sorting, setSorting] = useState<SortingState>([]);
   const [draggedColumnId, setDraggedColumnId] = useState<string | null>(null);
   const [selectedRow, setSelectedRow] = useState<TData | null>(null);
@@ -91,8 +92,8 @@ export function ErpDataGrid<TData extends Record<string, string | number | null 
           cell: (info) => <span className={column.align ? `cell-${column.align}` : undefined}>{formatCell(info.getValue() as string | number | null | undefined, column.dataType)}</span>,
           header: column.header,
           id: column.accessorKey,
-          minSize: 96,
-          size: column.dataType === 'date' ? 136 : 148
+          minSize: 72,
+          size: column.dataType === 'date' ? 88 : 78
         })
       );
   }, [columns]);
@@ -146,6 +147,7 @@ export function ErpDataGrid<TData extends Record<string, string | number | null 
     setColumnVisibility(initialColumnVisibility);
     setGlobalFilter('');
     setRowSelection({});
+    setShowFilterRow(false);
     setSorting([]);
     table.setPageSize(20);
     table.setPageIndex(0);
@@ -192,6 +194,7 @@ export function ErpDataGrid<TData extends Record<string, string | number | null 
         </div>
         <div className="erp-grid-actions">
           <input aria-label="그리드 검색" onChange={(event) => setGlobalFilter(event.target.value)} placeholder="검색" value={globalFilter} />
+          <button aria-pressed={showFilterRow} onClick={() => setShowFilterRow((isOpen) => !isOpen)} type="button">필터</button>
           <button onClick={() => setShowColumnChooser((isOpen) => !isOpen)} type="button">컬럼</button>
           <button onClick={exportCsv} type="button">CSV</button>
           <button onClick={resetLayout} type="button">초기화</button>
@@ -251,30 +254,32 @@ export function ErpDataGrid<TData extends Record<string, string | number | null 
                 <th className="erp-grid-row-action">상세</th>
               </tr>
             ))}
-            <tr className="erp-grid-filter-row">
-              <th />
-              {visibleOrderedColumns.map((column) => {
-                const filterValue = (column.getFilterValue() ?? '') as string;
+            {showFilterRow ? (
+              <tr className="erp-grid-filter-row">
+                <th />
+                {visibleOrderedColumns.map((column) => {
+                  const filterValue = (column.getFilterValue() ?? '') as string;
 
-                return (
-                  <th key={column.id}>
-                    <input
-                      aria-label={`${columnsById.get(column.id)?.header ?? column.id} 필터`}
-                      onChange={(event) => column.setFilterValue(event.target.value)}
-                      placeholder="필터"
-                      value={filterValue}
-                    />
-                    <select aria-label={`${columnsById.get(column.id)?.header ?? column.id} 헤더 필터`} onChange={(event) => column.setFilterValue(event.target.value)} value={filterValue}>
-                      <option value="">전체</option>
-                      {filterOptions[column.id]?.map((value) => (
-                        <option key={value} value={value}>{value}</option>
-                      ))}
-                    </select>
-                  </th>
-                );
-              })}
-              <th />
-            </tr>
+                  return (
+                    <th key={column.id}>
+                      <input
+                        aria-label={`${columnsById.get(column.id)?.header ?? column.id} 필터`}
+                        onChange={(event) => column.setFilterValue(event.target.value)}
+                        placeholder="필터"
+                        value={filterValue}
+                      />
+                      <select aria-label={`${columnsById.get(column.id)?.header ?? column.id} 헤더 필터`} onChange={(event) => column.setFilterValue(event.target.value)} value={filterValue}>
+                        <option value="">전체</option>
+                        {filterOptions[column.id]?.map((value) => (
+                          <option key={value} value={value}>{value}</option>
+                        ))}
+                      </select>
+                    </th>
+                  );
+                })}
+                <th />
+              </tr>
+            ) : null}
           </thead>
           <tbody>
             {visibleRows.map((row) => (

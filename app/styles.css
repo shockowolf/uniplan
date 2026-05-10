@@ -152,6 +152,7 @@ a {
   margin-bottom: 4px;
 }
 .dashboard-main {
+  min-width: 0;
   padding: 30px;
   display: flex;
   flex-direction: column;
@@ -293,6 +294,7 @@ th { color: var(--muted); font-size: 13px; }
   padding: 9px 10px;
 }
 .module-panel {
+  min-width: 0;
   background: rgba(16, 27, 45, .9);
   border: 1px solid var(--line);
   border-radius: 26px;
@@ -366,6 +368,7 @@ th { color: var(--muted); font-size: 13px; }
   padding: 8px 12px;
 }
 .erp-grid {
+  min-width: 0;
   background: var(--panel-2);
   border: 1px solid var(--line);
   border-radius: 20px;
@@ -405,6 +408,10 @@ th { color: var(--muted); font-size: 13px; }
   border-radius: 12px;
   padding: 8px 10px;
 }
+.erp-grid-actions button[aria-pressed="true"] {
+  border-color: rgba(95, 211, 255, .55);
+  color: var(--accent);
+}
 .erp-column-chooser {
   display: flex;
   flex-wrap: wrap;
@@ -421,7 +428,19 @@ th { color: var(--muted); font-size: 13px; }
   font-size: 13px;
 }
 .erp-grid-scroll {
+  max-width: 100%;
   overflow-x: auto;
+}
+.erp-grid-scroll table {
+  width: max-content;
+  min-width: 100%;
+  table-layout: fixed;
+}
+.erp-grid-scroll th,
+.erp-grid-scroll td {
+  max-width: 240px;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 th {
   position: relative;
@@ -435,8 +454,14 @@ th {
   border-radius: 0;
   background: transparent;
   color: var(--muted);
+  min-width: 0;
+  overflow: hidden;
   padding: 0;
   text-align: left;
+  white-space: nowrap;
+}
+.erp-grid-sort span:last-child {
+  flex: 0 0 auto;
 }
 .erp-grid-sort:hover {
   color: var(--text);
@@ -467,7 +492,7 @@ th {
 .erp-grid-filter-row input,
 .erp-grid-filter-row select {
   width: 100%;
-  min-width: 96px;
+  min-width: 0;
   border: 1px solid var(--line);
   border-radius: 10px;
   background: rgba(7, 17, 31, .65);
@@ -482,14 +507,14 @@ th {
 }
 .erp-grid-select-col,
 .erp-grid-action-col {
-  width: 72px;
+  width: 52px;
 }
 .erp-grid-row-select {
-  width: 52px;
+  width: 40px;
   text-align: center;
 }
 .erp-grid-row-action {
-  width: 72px;
+  width: 52px;
   text-align: center;
 }
 tfoot td {
