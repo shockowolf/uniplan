@@ -179,6 +179,109 @@ async function main() {
     });
   }
 
+  const financeChildren = [
+    {
+      code: 'finance-tax-invoice',
+      label: '전자세금계산서',
+      href: '/finance?legacy=LM101',
+      sortOrder: 10,
+      legacyMenuId: 'LM101',
+      legacyMapId: 'LM101'
+    },
+    {
+      code: 'finance-tax-receipt',
+      label: '세무접수관리',
+      href: '/finance?legacy=LM102',
+      sortOrder: 20,
+      legacyMenuId: 'LM102',
+      legacyMapId: 'LM102'
+    }
+  ];
+
+  // Imported from easiERP local_erp_public_feature_dummy_seed.sql: LFIN -> LM101/LM102.
+  for (const seed of financeChildren) {
+    const menu = await prisma.menu.upsert({
+      where: { companyId_code: { companyId, code: seed.code } },
+      update: {
+        label: seed.label,
+        href: seed.href,
+        sortOrder: seed.sortOrder,
+        legacyMenuId: seed.legacyMenuId,
+        active: true
+      },
+      create: {
+        companyId,
+        code: seed.code,
+        label: seed.label,
+        href: seed.href,
+        sortOrder: seed.sortOrder,
+        legacyMenuId: seed.legacyMenuId
+      }
+    });
+
+    const menuNode = await prisma.menuNode.upsert({
+      where: { id: `menu-node-${seed.code}` },
+      update: {
+        companyId,
+        domainId: domain.id,
+        menuId: menu.id,
+        parentId: 'menu-node-finance',
+        label: seed.label,
+        href: seed.href,
+        sortOrder: seed.sortOrder,
+        legacyMapId: seed.legacyMapId,
+        active: true
+      },
+      create: {
+        id: `menu-node-${seed.code}`,
+        companyId,
+        domainId: domain.id,
+        menuId: menu.id,
+        parentId: 'menu-node-finance',
+        label: seed.label,
+        href: seed.href,
+        sortOrder: seed.sortOrder,
+        legacyMapId: seed.legacyMapId
+      }
+    });
+
+    await prisma.roleMenuPermission.upsert({
+      where: { roleId_menuNodeId: { roleId: adminRole.id, menuNodeId: menuNode.id } },
+      update: {
+        canRead: true,
+        canCreate: true,
+        canUpdate: true,
+        canDelete: true,
+        canAdmin: true
+      },
+      create: {
+        roleId: adminRole.id,
+        menuNodeId: menuNode.id,
+        canRead: true,
+        canCreate: true,
+        canUpdate: true,
+        canDelete: true,
+        canAdmin: true
+      }
+    });
+
+    await prisma.roleMenuPermission.upsert({
+      where: { roleId_menuNodeId: { roleId: staffRole.id, menuNodeId: menuNode.id } },
+      update: {
+        canRead: true,
+        canCreate: false,
+        canUpdate: false,
+        canDelete: false,
+        canAdmin: false
+      },
+      create: {
+        roleId: staffRole.id,
+        menuNodeId: menuNode.id,
+        canRead: true
+      }
+    });
+  }
+
   const employees = await Promise.all([
     prisma.employee.upsert({
       where: { companyId_employeeNo: { companyId, employeeNo: 'E001' } },
@@ -320,7 +423,7 @@ async function main() {
     products: products.length,
     invoices: invoiceSeeds.length,
     employees: employees.length,
-    menus: navigationSeeds.length
+    menus: navigationSeeds.length + financeChildren.length
   });
 }
 

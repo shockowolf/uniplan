@@ -3,6 +3,7 @@ import { demoCompanyId, prisma } from '@/lib/db';
 export type SidebarMenuItem = {
   label: string;
   href: string;
+  children?: SidebarMenuItem[];
 };
 
 export const fallbackSidebarMenuItems: SidebarMenuItem[] = [
@@ -47,6 +48,30 @@ export async function getSidebarMenuItems(companyId = demoCompanyId, roleCode = 
             href: true,
             active: true
           }
+        },
+        children: {
+          where: {
+            active: true,
+            ...(role
+              ? {
+                  permissions: {
+                    some: {
+                      roleId: role.id,
+                      canRead: true
+                    }
+                  }
+                }
+              : {})
+          },
+          include: {
+            menu: {
+              select: {
+                href: true,
+                active: true
+              }
+            }
+          },
+          orderBy: [{ sortOrder: 'asc' }, { label: 'asc' }]
         }
       },
       orderBy: [{ sortOrder: 'asc' }, { label: 'asc' }]
@@ -56,7 +81,13 @@ export async function getSidebarMenuItems(companyId = demoCompanyId, roleCode = 
       .filter((node) => node.menu?.active ?? true)
       .map((node) => ({
         label: node.label,
-        href: node.href ?? node.menu?.href ?? '/'
+        href: node.href ?? node.menu?.href ?? '/',
+        children: node.children
+          .filter((child) => child.menu?.active ?? true)
+          .map((child) => ({
+            label: child.label,
+            href: child.href ?? child.menu?.href ?? '/'
+          }))
       }));
 
     return items.length > 0 ? items : fallbackSidebarMenuItems;

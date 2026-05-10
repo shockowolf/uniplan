@@ -21,6 +21,7 @@ type AppSidebarProps = {
 
 export function AppSidebar({ menuItems }: AppSidebarProps) {
   const pathname = usePathname();
+  const isActive = (href: string) => pathname === href.split('?')[0];
 
   return (
     <aside className="app-sidebar">
@@ -33,11 +34,27 @@ export function AppSidebar({ menuItems }: AppSidebarProps) {
       </Link>
 
       <nav aria-label="주요 메뉴" className="nav-menu">
-        {menuItems.map((item) => (
-          <Link className={pathname === item.href ? 'nav-link active' : 'nav-link'} href={item.href} key={`${item.href}-${item.label}`}>
-            {item.label}
-          </Link>
-        ))}
+        {menuItems.map((item) => {
+          const hasChildren = Boolean(item.children?.length);
+          const childActive = item.children?.some((child) => isActive(child.href)) ?? false;
+
+          return (
+            <div className={hasChildren ? 'nav-group' : undefined} key={`${item.href}-${item.label}`}>
+              <Link className={isActive(item.href) || childActive ? 'nav-link active' : 'nav-link'} href={item.href}>
+                {item.label}
+              </Link>
+              {hasChildren ? (
+                <div className="nav-children">
+                  {item.children?.map((child) => (
+                    <Link className={isActive(child.href) ? 'nav-link nav-child active' : 'nav-link nav-child'} href={child.href} key={`${child.href}-${child.label}`}>
+                      {child.label}
+                    </Link>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          );
+        })}
       </nav>
 
       <section className="scenario-box">
