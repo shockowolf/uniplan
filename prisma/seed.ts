@@ -94,7 +94,8 @@ async function main() {
     { code: 'customers', label: 'Customers', href: '/customers', sortOrder: 30, legacyMenuId: 'customers', legacyMapId: 'customers' },
     { code: 'inventory', label: 'Inventory', href: '/inventory', sortOrder: 40, legacyMenuId: 'inventory', legacyMapId: 'inventory' },
     { code: 'finance', label: 'Finance', href: '/finance', sortOrder: 50, legacyMenuId: 'finance', legacyMapId: 'finance' },
-    { code: 'operations', label: 'Operations', href: '/operations', sortOrder: 60, legacyMenuId: 'operations', legacyMapId: 'operations' }
+    { code: 'operations', label: 'Operations', href: '/operations', sortOrder: 60, legacyMenuId: 'operations', legacyMapId: 'operations' },
+    { code: 'system', label: 'System', href: '/system', sortOrder: 70, legacyMenuId: 'LSYS', legacyMapId: 'LSYS' }
   ];
 
   for (const seed of navigationSeeds) {
@@ -198,88 +199,234 @@ async function main() {
     }
   ];
 
-  // Imported from easiERP local_erp_public_feature_dummy_seed.sql: LFIN -> LM101/LM102.
-  for (const seed of financeChildren) {
-    const menu = await prisma.menu.upsert({
-      where: { companyId_code: { companyId, code: seed.code } },
-      update: {
-        label: seed.label,
-        href: seed.href,
-        sortOrder: seed.sortOrder,
-        legacyMenuId: seed.legacyMenuId,
-        active: true
-      },
-      create: {
-        companyId,
-        code: seed.code,
-        label: seed.label,
-        href: seed.href,
-        sortOrder: seed.sortOrder,
-        legacyMenuId: seed.legacyMenuId
-      }
-    });
+  const employeeChildren = [
+    {
+      code: 'operations-employees',
+      label: '사원관리',
+      href: '/operations?legacy=LM013',
+      sortOrder: 10,
+      legacyMenuId: 'LM013',
+      legacyMapId: 'LM013'
+    }
+  ];
 
-    const menuNode = await prisma.menuNode.upsert({
-      where: { id: `menu-node-${seed.code}` },
-      update: {
-        companyId,
-        domainId: domain.id,
-        menuId: menu.id,
-        parentId: 'menu-node-finance',
-        label: seed.label,
-        href: seed.href,
-        sortOrder: seed.sortOrder,
-        legacyMapId: seed.legacyMapId,
-        active: true
-      },
-      create: {
-        id: `menu-node-${seed.code}`,
-        companyId,
-        domainId: domain.id,
-        menuId: menu.id,
-        parentId: 'menu-node-finance',
-        label: seed.label,
-        href: seed.href,
-        sortOrder: seed.sortOrder,
-        legacyMapId: seed.legacyMapId
-      }
-    });
+  const customerChildren = [
+    {
+      code: 'customers-master',
+      label: '거래처관리',
+      href: '/customers?legacy=LM014',
+      sortOrder: 10,
+      legacyMenuId: 'LM014',
+      legacyMapId: 'LM014'
+    },
+    {
+      code: 'customers-partners',
+      label: '파트너관리',
+      href: '/customers?legacy=LM015',
+      sortOrder: 20,
+      legacyMenuId: 'LM015',
+      legacyMapId: 'LM015'
+    }
+  ];
 
-    await prisma.roleMenuPermission.upsert({
-      where: { roleId_menuNodeId: { roleId: adminRole.id, menuNodeId: menuNode.id } },
-      update: {
-        canRead: true,
-        canCreate: true,
-        canUpdate: true,
-        canDelete: true,
-        canAdmin: true
-      },
-      create: {
-        roleId: adminRole.id,
-        menuNodeId: menuNode.id,
-        canRead: true,
-        canCreate: true,
-        canUpdate: true,
-        canDelete: true,
-        canAdmin: true
-      }
-    });
+  const systemChildren = [
+    {
+      code: 'system-admin-home',
+      label: '관리자 홈',
+      href: '/system?legacy=LM001',
+      sortOrder: 10,
+      legacyMenuId: 'LM001',
+      legacyMapId: 'LM001'
+    },
+    {
+      code: 'system-users',
+      label: '사용자관리',
+      href: '/system?legacy=LM002',
+      sortOrder: 20,
+      legacyMenuId: 'LM002',
+      legacyMapId: 'LM002'
+    },
+    {
+      code: 'system-roles',
+      label: '권한관리',
+      href: '/system?legacy=LM003',
+      sortOrder: 30,
+      legacyMenuId: 'LM003',
+      legacyMapId: 'LM003'
+    },
+    {
+      code: 'system-menus',
+      label: '메뉴관리',
+      href: '/system?legacy=LM004',
+      sortOrder: 40,
+      legacyMenuId: 'LM004',
+      legacyMapId: 'LM004'
+    },
+    {
+      code: 'system-url-auth',
+      label: 'URL 권한',
+      href: '/system?legacy=LM005',
+      sortOrder: 50,
+      legacyMenuId: 'LM005',
+      legacyMapId: 'LM005'
+    },
+    {
+      code: 'system-domains',
+      label: '도메인관리',
+      href: '/system?legacy=LM006',
+      sortOrder: 60,
+      legacyMenuId: 'LM006',
+      legacyMapId: 'LM006'
+    },
+    {
+      code: 'system-companies',
+      label: '회사관리',
+      href: '/system?legacy=LM007',
+      sortOrder: 70,
+      legacyMenuId: 'LM007',
+      legacyMapId: 'LM007'
+    },
+    {
+      code: 'system-codes',
+      label: '공통코드',
+      href: '/system?legacy=LM008',
+      sortOrder: 80,
+      legacyMenuId: 'LM008',
+      legacyMapId: 'LM008'
+    },
+    {
+      code: 'system-home-cards',
+      label: '홈 카드',
+      href: '/system?legacy=LM009',
+      sortOrder: 90,
+      legacyMenuId: 'LM009',
+      legacyMapId: 'LM009'
+    },
+    {
+      code: 'system-my-page',
+      label: '마이페이지',
+      href: '/system?legacy=LM020',
+      sortOrder: 100,
+      legacyMenuId: 'LM020',
+      legacyMapId: 'LM020'
+    },
+    {
+      code: 'system-login-page',
+      label: '로그인 페이지',
+      href: '/system?legacy=LOGIN',
+      sortOrder: 110,
+      legacyMenuId: 'LOGIN',
+      legacyMapId: 'LOGIN'
+    }
+  ];
 
-    await prisma.roleMenuPermission.upsert({
-      where: { roleId_menuNodeId: { roleId: staffRole.id, menuNodeId: menuNode.id } },
-      update: {
-        canRead: true,
-        canCreate: false,
-        canUpdate: false,
-        canDelete: false,
-        canAdmin: false
-      },
-      create: {
-        roleId: staffRole.id,
-        menuNodeId: menuNode.id,
-        canRead: true
-      }
-    });
+  const childMenuGroups = [
+    {
+      parentId: 'menu-node-finance',
+      source: 'easiERP local_erp_public_feature_dummy_seed.sql: LFIN -> LM101/LM102',
+      items: financeChildren
+    },
+    {
+      parentId: 'menu-node-operations',
+      source: 'easiERP local_dummy_menu_user_seed.sql: LHR -> LM013',
+      items: employeeChildren
+    },
+    {
+      parentId: 'menu-node-customers',
+      source: 'easiERP local_dummy_menu_user_seed.sql: LBIZ -> LM014/LM015',
+      items: customerChildren
+    },
+    {
+      parentId: 'menu-node-system',
+      source: 'easiERP local_dummy_menu_user_seed.sql: LSYS/LROOT login related menus',
+      items: systemChildren
+    }
+  ];
+
+  // Imported from easiERP local seed files. The source field documents the original legacy branch.
+  for (const group of childMenuGroups) {
+    for (const seed of group.items) {
+      const menu = await prisma.menu.upsert({
+        where: { companyId_code: { companyId, code: seed.code } },
+        update: {
+          label: seed.label,
+          href: seed.href,
+          sortOrder: seed.sortOrder,
+          legacyMenuId: seed.legacyMenuId,
+          active: true
+        },
+        create: {
+          companyId,
+          code: seed.code,
+          label: seed.label,
+          href: seed.href,
+          sortOrder: seed.sortOrder,
+          legacyMenuId: seed.legacyMenuId
+        }
+      });
+
+      const menuNode = await prisma.menuNode.upsert({
+        where: { id: `menu-node-${seed.code}` },
+        update: {
+          companyId,
+          domainId: domain.id,
+          menuId: menu.id,
+          parentId: group.parentId,
+          label: seed.label,
+          href: seed.href,
+          sortOrder: seed.sortOrder,
+          legacyMapId: seed.legacyMapId,
+          active: true
+        },
+        create: {
+          id: `menu-node-${seed.code}`,
+          companyId,
+          domainId: domain.id,
+          menuId: menu.id,
+          parentId: group.parentId,
+          label: seed.label,
+          href: seed.href,
+          sortOrder: seed.sortOrder,
+          legacyMapId: seed.legacyMapId
+        }
+      });
+
+      await prisma.roleMenuPermission.upsert({
+        where: { roleId_menuNodeId: { roleId: adminRole.id, menuNodeId: menuNode.id } },
+        update: {
+          canRead: true,
+          canCreate: true,
+          canUpdate: true,
+          canDelete: true,
+          canAdmin: true
+        },
+        create: {
+          roleId: adminRole.id,
+          menuNodeId: menuNode.id,
+          canRead: true,
+          canCreate: true,
+          canUpdate: true,
+          canDelete: true,
+          canAdmin: true
+        }
+      });
+
+      await prisma.roleMenuPermission.upsert({
+        where: { roleId_menuNodeId: { roleId: staffRole.id, menuNodeId: menuNode.id } },
+        update: {
+          canRead: true,
+          canCreate: false,
+          canUpdate: false,
+          canDelete: false,
+          canAdmin: false
+        },
+        create: {
+          roleId: staffRole.id,
+          menuNodeId: menuNode.id,
+          canRead: true
+        }
+      });
+    }
   }
 
   const employees = await Promise.all([
@@ -423,7 +570,7 @@ async function main() {
     products: products.length,
     invoices: invoiceSeeds.length,
     employees: employees.length,
-    menus: navigationSeeds.length + financeChildren.length
+    menus: navigationSeeds.length + childMenuGroups.reduce((total, group) => total + group.items.length, 0)
   });
 }
 

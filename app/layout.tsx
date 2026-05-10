@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { Suspense } from 'react';
 import { AppSidebar } from '@/components/AppSidebar';
 import { getSidebarMenuItems } from '@/lib/navigation';
 import './styles.css';
@@ -15,7 +16,9 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
     <html lang="ko">
       <body>
         <main className="dashboard-shell">
-          <AppSidebar menuItems={menuItems} />
+          <Suspense fallback={null}>
+            <AppSidebar menuItems={menuItems} />
+          </Suspense>
           {children}
         </main>
       </body>

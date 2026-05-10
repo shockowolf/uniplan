@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useSearchParams } from 'next/navigation';
 import type { SidebarMenuItem } from '@/lib/navigation';
 
 const examples = [
@@ -21,7 +21,9 @@ type AppSidebarProps = {
 
 export function AppSidebar({ menuItems }: AppSidebarProps) {
   const pathname = usePathname();
-  const isActive = (href: string) => pathname === href.split('?')[0];
+  const searchParams = useSearchParams();
+  const currentHref = searchParams.size > 0 ? `${pathname}?${searchParams.toString()}` : pathname;
+  const isActive = (href: string) => (href.includes('?') ? currentHref === href : pathname === href);
 
   return (
     <aside className="app-sidebar">
