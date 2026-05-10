@@ -115,6 +115,23 @@ a {
 .nav-caret.open {
   transform: rotate(45deg);
 }
+.nav-label {
+  align-items: center;
+  display: inline-flex;
+  gap: 8px;
+}
+.nav-label::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: transparent;
+}
+.nav-link.active .nav-label::before {
+  background: var(--accent);
+  box-shadow: 0 0 12px rgba(95, 211, 255, .65);
+}
 .nav-children {
   display: flex;
   flex-direction: column;
@@ -127,16 +144,6 @@ a {
   color: var(--muted);
   font-size: 13px;
   padding: 9px 10px;
-}
-.nav-child::before {
-  content: "";
-  display: inline-block;
-  width: 6px;
-  height: 6px;
-  margin-right: 8px;
-  border-radius: 999px;
-  background: var(--accent);
-  vertical-align: 1px;
 }
 .scenario-box {
   margin-top: 20px;

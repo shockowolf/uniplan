@@ -64,19 +64,19 @@ export function AppSidebar({ menuItems }: AppSidebarProps) {
                   onClick={() => setOpenGroupKey(isOpen ? null : item.href)}
                   type="button"
                 >
-                  <span>{item.label}</span>
+                  <span className="nav-label">{item.label}</span>
                   <span aria-hidden="true" className={isOpen ? 'nav-caret open' : 'nav-caret'} />
                 </button>
               ) : (
                 <Link className={isActive(item.href) ? 'nav-link active' : 'nav-link'} href={item.href}>
-                  {item.label}
+                  <span className="nav-label">{item.label}</span>
                 </Link>
               )}
               {hasChildren && isOpen ? (
                 <div className="nav-children">
                   {item.children?.map((child) => (
                     <Link className={isActive(child.href) ? 'nav-link nav-child active' : 'nav-link nav-child'} href={child.href} key={`${child.href}-${child.label}`}>
-                      {child.label}
+                      <span className="nav-label">{child.label}</span>
                     </Link>
                   ))}
                 </div>
