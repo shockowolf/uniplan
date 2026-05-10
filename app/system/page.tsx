@@ -1,6 +1,17 @@
 import { ModulePage } from '@/components/ModulePage';
+import { UserManagementDetail } from '@/components/system/UserManagementDetail';
 
-export default function SystemPage() {
+type SystemPageProps = {
+  searchParams?: Promise<{ legacy?: string }>;
+};
+
+export default async function SystemPage({ searchParams }: SystemPageProps) {
+  const params = searchParams ? await searchParams : {};
+
+  if (params.legacy === 'LM002') {
+    return <UserManagementDetail />;
+  }
+
   return (
     <ModulePage
       description="easiERP의 시스템, 사용자, 권한, 메뉴, URL 인증, 도메인, 회사, 로그인 진입 정보를 Uniplan 관리 구조로 옮기는 영역입니다."

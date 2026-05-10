@@ -315,6 +315,56 @@ th { color: var(--muted); font-size: 13px; }
   line-height: 1.65;
   margin-bottom: 0;
 }
+.user-management-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.gootz-filterbar {
+  align-items: flex-end;
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: rgba(7, 17, 31, .36);
+}
+.gootz-filterbar h2 {
+  font-size: 18px;
+}
+.gootz-filter-fields {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(150px, 1fr));
+  gap: 10px;
+  min-width: min(620px, 100%);
+}
+.gootz-filter-fields label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.gootz-filter-fields input,
+.gootz-filter-fields select {
+  min-height: 38px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(7, 17, 31, .65);
+  color: var(--text);
+  padding: 8px 10px;
+}
+.gootz-commandbar {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.gootz-commandbar button {
+  min-width: 72px;
+  border-radius: 12px;
+  padding: 8px 12px;
+}
 .erp-grid {
   background: var(--panel-2);
   border: 1px solid var(--line);
@@ -447,6 +497,8 @@ th { color: var(--muted); font-size: 13px; }
   .nav-menu { display: grid; grid-template-columns: repeat(3, 1fr); }
   .content-grid { grid-template-columns: 1fr; }
   .module-grid { grid-template-columns: 1fr; }
+  .gootz-filterbar { align-items: stretch; flex-direction: column; }
+  .gootz-filter-fields { grid-template-columns: 1fr; min-width: 0; }
   .erp-detail-list { grid-template-columns: 1fr; }
   .ai-panel { position: static; }
 }
