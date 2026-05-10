@@ -323,27 +323,27 @@ async function main() {
   const childMenuGroups = [
     {
       parentId: 'menu-node-finance',
-      source: 'easiERP local_erp_public_feature_dummy_seed.sql: LFIN -> LM101/LM102',
+      source: 'UniPlan finance menu seed: LFIN -> LM101/LM102',
       items: financeChildren
     },
     {
       parentId: 'menu-node-operations',
-      source: 'easiERP local_dummy_menu_user_seed.sql: LHR -> LM013',
+      source: 'UniPlan operations menu seed: LHR -> LM013',
       items: employeeChildren
     },
     {
       parentId: 'menu-node-customers',
-      source: 'easiERP local_dummy_menu_user_seed.sql: LBIZ -> LM014/LM015',
+      source: 'UniPlan customer menu seed: LBIZ -> LM014/LM015',
       items: customerChildren
     },
     {
       parentId: 'menu-node-system',
-      source: 'easiERP local_dummy_menu_user_seed.sql: LSYS/LROOT login related menus',
+      source: 'UniPlan system menu seed: LSYS/LROOT login related menus',
       items: systemChildren
     }
   ];
 
-  // Imported from easiERP local seed files. The source field documents the original legacy branch.
+  // Seeded into UniPlan menu branches while preserving the original legacy branch ids.
   for (const group of childMenuGroups) {
     for (const seed of group.items) {
       const menu = await prisma.menu.upsert({

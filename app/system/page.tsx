@@ -1,5 +1,5 @@
 import { ModulePage } from '@/components/ModulePage';
-import { GootzChartDashboard } from '@/components/system/GootzChartDashboard';
+import { UniChartDashboard } from '@/components/system/UniChartDashboard';
 import { UserManagementDetail } from '@/components/system/UserManagementDetail';
 
 type SystemPageProps = {
@@ -14,12 +14,12 @@ export default async function SystemPage({ searchParams }: SystemPageProps) {
   }
 
   if (params.legacy === 'LM009') {
-    return <GootzChartDashboard />;
+    return <UniChartDashboard />;
   }
 
   return (
     <ModulePage
-      description="easiERP의 시스템, 사용자, 권한, 메뉴, URL 인증, 도메인, 회사, 로그인 진입 정보를 Uniplan 관리 구조로 옮기는 영역입니다."
+      description="UniPlan의 시스템, 사용자, 권한, 메뉴, URL 인증, 도메인, 회사, 로그인 진입 정보를 관리하는 영역입니다."
       eyebrow="System"
       metrics={[
         { label: '시스템 메뉴', value: 8 },

@@ -293,26 +293,26 @@ h2 { font-size: 21px; }
   border-radius: 26px;
   padding: 18px;
 }
-.gootz-chart-toolbar {
+.uni-chart-toolbar {
   align-items: flex-end;
   display: flex;
   justify-content: space-between;
   gap: 16px;
 }
-.gootz-chart-toolbar span {
+.uni-chart-toolbar span {
   color: var(--muted);
   display: block;
   font-size: 12px;
   margin-top: 6px;
 }
-.gootz-chart-controls label {
+.uni-chart-controls label {
   color: var(--muted);
   display: flex;
   flex-direction: column;
   gap: 6px;
   font-size: 12px;
 }
-.gootz-chart-controls select {
+.uni-chart-controls select {
   min-height: 38px;
   border: 1px solid var(--line);
   border-radius: 12px;
@@ -320,21 +320,21 @@ h2 { font-size: 21px; }
   color: var(--text);
   padding: 8px 10px;
 }
-.gootz-chart-tabs {
+.uni-chart-tabs {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
   margin-top: 18px;
 }
-.gootz-chart-tabs button {
+.uni-chart-tabs button {
   border-radius: 12px;
   padding: 8px 12px;
 }
-.gootz-chart-tabs button[aria-pressed="true"] {
+.uni-chart-tabs button[aria-pressed="true"] {
   border-color: rgba(95, 211, 255, .55);
   color: var(--accent);
 }
-.gootz-chart-grid {
+.uni-chart-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 14px;
@@ -417,7 +417,7 @@ th { color: var(--muted); font-size: 13px; }
   flex-direction: column;
   gap: 16px;
 }
-.gootz-filterbar {
+.uni-filterbar {
   align-items: flex-end;
   display: flex;
   justify-content: space-between;
@@ -427,24 +427,24 @@ th { color: var(--muted); font-size: 13px; }
   border-radius: 16px;
   background: rgba(7, 17, 31, .36);
 }
-.gootz-filterbar h2 {
+.uni-filterbar h2 {
   font-size: 18px;
 }
-.gootz-filter-fields {
+.uni-filter-fields {
   display: grid;
   grid-template-columns: repeat(3, minmax(150px, 1fr));
   gap: 10px;
   min-width: min(620px, 100%);
 }
-.gootz-filter-fields label {
+.uni-filter-fields label {
   display: flex;
   flex-direction: column;
   gap: 6px;
   color: var(--muted);
   font-size: 12px;
 }
-.gootz-filter-fields input,
-.gootz-filter-fields select {
+.uni-filter-fields input,
+.uni-filter-fields select {
   min-height: 38px;
   border: 1px solid var(--line);
   border-radius: 12px;
@@ -452,12 +452,12 @@ th { color: var(--muted); font-size: 13px; }
   color: var(--text);
   padding: 8px 10px;
 }
-.gootz-commandbar {
+.uni-commandbar {
   display: flex;
   justify-content: flex-end;
   gap: 8px;
 }
-.gootz-commandbar button {
+.uni-commandbar button {
   min-width: 72px;
   border-radius: 12px;
   padding: 8px 12px;
@@ -711,9 +711,9 @@ tfoot td {
   .nav-menu { display: grid; grid-template-columns: repeat(3, 1fr); }
   .content-grid { grid-template-columns: 1fr; }
   .module-grid { grid-template-columns: 1fr; }
-  .gootz-chart-grid { grid-template-columns: 1fr; }
-  .gootz-filterbar { align-items: stretch; flex-direction: column; }
-  .gootz-filter-fields { grid-template-columns: 1fr; min-width: 0; }
+  .uni-chart-grid { grid-template-columns: 1fr; }
+  .uni-filterbar { align-items: stretch; flex-direction: column; }
+  .uni-filter-fields { grid-template-columns: 1fr; min-width: 0; }
   .erp-detail-list { grid-template-columns: 1fr; }
   .ai-panel { position: static; }
 }

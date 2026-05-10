@@ -1,9 +1,9 @@
 import type { Chart } from '@/lib/templates/types';
 
-type GootzChartGroup = {
+type UniChartGroup = {
   key: string;
   title: string;
-  source: string;
+  sourceLabel: string;
   charts: Chart[];
 };
 
@@ -39,11 +39,11 @@ const salesAreaData = [
   { areaCd: '제주', sum01: 7000000, sum02: 3000000, sum03: 2000000, sum04: 2000000, sum05: 1000000, cnt01: 4, cnt02: 2, cnt03: 1, cnt04: 1, cnt05: 1 }
 ];
 
-export const gootzChartGroups: GootzChartGroup[] = [
+export const uniChartGroups: UniChartGroup[] = [
   {
     key: 'home-card',
     title: '홈 카드 차트',
-    source: 'home/card/contractChart.jsp, inboundChart.jsp, salesChart.jsp',
+    sourceLabel: 'Uni home card chart presets',
     charts: [
       {
         kind: 'stacked-area',
@@ -113,7 +113,7 @@ export const gootzChartGroups: GootzChartGroup[] = [
   {
     key: 'sales-statistics',
     title: '판매 통계 차트',
-    source: 'sales/sales_chart.jsp',
+    sourceLabel: 'Uni sales chart presets',
     charts: [
       {
         kind: 'stacked-area',
@@ -156,7 +156,7 @@ export const gootzChartGroups: GootzChartGroup[] = [
   {
     key: 'operation-statistics',
     title: '운영/인사 차트',
-    source: 'bil/bill_chart.jsp, welfare/vacation_chart.jsp, employee/recruit_chart.jsp',
+    sourceLabel: 'Uni operation chart presets',
     charts: [
       {
         kind: 'composed',

@@ -121,7 +121,7 @@ export function UserManagementDetail() {
           <p className="eyebrow">System / LM002</p>
           <h1>사용자관리</h1>
         </div>
-        <div className="status-pill">gootzERP Grid Pattern</div>
+        <div className="status-pill">Uni Grid Library</div>
       </header>
 
       <section className="metrics">
@@ -144,12 +144,12 @@ export function UserManagementDetail() {
       </section>
 
       <section className="module-panel user-management-panel">
-        <div className="gootz-filterbar">
+        <div className="uni-filterbar">
           <div>
             <p className="eyebrow">Search</p>
             <h2>사용자 조회 조건</h2>
           </div>
-          <div className="gootz-filter-fields">
+          <div className="uni-filter-fields">
             <label>
               사용자구분
               <select defaultValue="">
@@ -175,7 +175,7 @@ export function UserManagementDetail() {
           </div>
         </div>
 
-        <div className="gootz-commandbar">
+        <div className="uni-commandbar">
           <button type="button">조회</button>
           <button type="button">신규</button>
           <button type="button">저장</button>
