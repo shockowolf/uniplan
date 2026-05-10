@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
+import { useEffect, useMemo, useState } from 'react';
 import type { SidebarMenuItem } from '@/lib/navigation';
 
 const examples = [
@@ -24,6 +25,19 @@ export function AppSidebar({ menuItems }: AppSidebarProps) {
   const searchParams = useSearchParams();
   const currentHref = searchParams.size > 0 ? `${pathname}?${searchParams.toString()}` : pathname;
   const isActive = (href: string) => (href.includes('?') ? currentHref === href : pathname === href);
+  const activeGroupKey = useMemo(
+    () =>
+      menuItems.find((item) => {
+        const childActive = item.children?.some((child) => isActive(child.href)) ?? false;
+        return Boolean(item.children?.length) && (isActive(item.href) || childActive);
+      })?.href ?? null,
+    [currentHref, menuItems, pathname]
+  );
+  const [openGroupKey, setOpenGroupKey] = useState<string | null>(activeGroupKey);
+
+  useEffect(() => {
+    setOpenGroupKey(activeGroupKey);
+  }, [activeGroupKey]);
 
   return (
     <aside className="app-sidebar">
@@ -39,13 +53,26 @@ export function AppSidebar({ menuItems }: AppSidebarProps) {
         {menuItems.map((item) => {
           const hasChildren = Boolean(item.children?.length);
           const childActive = item.children?.some((child) => isActive(child.href)) ?? false;
+          const isOpen = openGroupKey === item.href;
 
           return (
             <div className={hasChildren ? 'nav-group' : undefined} key={`${item.href}-${item.label}`}>
-              <Link className={isActive(item.href) || childActive ? 'nav-link active' : 'nav-link'} href={item.href}>
-                {item.label}
-              </Link>
               {hasChildren ? (
+                <button
+                  aria-expanded={isOpen}
+                  className={isActive(item.href) || childActive || isOpen ? 'nav-link nav-toggle active' : 'nav-link nav-toggle'}
+                  onClick={() => setOpenGroupKey(isOpen ? null : item.href)}
+                  type="button"
+                >
+                  <span>{item.label}</span>
+                  <span aria-hidden="true" className={isOpen ? 'nav-caret open' : 'nav-caret'} />
+                </button>
+              ) : (
+                <Link className={isActive(item.href) ? 'nav-link active' : 'nav-link'} href={item.href}>
+                  {item.label}
+                </Link>
+              )}
+              {hasChildren && isOpen ? (
                 <div className="nav-children">
                   {item.children?.map((child) => (
                     <Link className={isActive(child.href) ? 'nav-link nav-child active' : 'nav-link nav-child'} href={child.href} key={`${child.href}-${child.label}`}>

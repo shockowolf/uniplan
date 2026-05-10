@@ -75,6 +75,7 @@ a {
 .nav-menu button,
 .nav-link {
   display: block;
+  width: 100%;
   text-align: left;
   background: transparent;
 }
@@ -92,6 +93,27 @@ a {
 .nav-link.active {
   background: linear-gradient(90deg, rgba(95, 211, 255, .18), rgba(124, 92, 255, .12));
   border-color: rgba(95, 211, 255, .45);
+}
+.nav-toggle {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+.nav-caret {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 auto;
+  border-right: 2px solid var(--muted);
+  border-bottom: 2px solid var(--muted);
+  transform: rotate(-45deg);
+  transition: transform .16s ease, border-color .16s ease;
+}
+.nav-toggle.active .nav-caret {
+  border-color: var(--accent);
+}
+.nav-caret.open {
+  transform: rotate(45deg);
 }
 .nav-children {
   display: flex;
