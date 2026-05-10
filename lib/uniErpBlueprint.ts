@@ -305,29 +305,16 @@ const financeItems: UniErpMenuItem[] = [
     status: 'planned'
   },
   {
-    code: 'finance-tax-invoice',
-    label: '전자세금계산서',
-    href: '/finance?legacy=LM101',
-    sortOrder: 20,
-    legacyMenuId: 'LM101',
-    legacyMapId: 'LM101',
-    sourceMenu: '전자세금계산서',
-    legacyTables: ['tbbil_taxbil', 'tbbil_taxbil_item', 'tbcrm_cust_info'],
-    targetEntities: ['taxInvoices', 'taxInvoiceItems', 'customers'],
-    purpose: '거래처 기준 전자세금계산서 발행/조회 흐름을 관리합니다.',
-    status: 'planned'
-  },
-  {
-    code: 'finance-tax-receipt',
-    label: '세무접수관리',
-    href: '/finance?legacy=LM102',
+    code: 'finance-costs',
+    label: '비용관리',
+    href: '/finance?legacy=UNI-COST',
     sortOrder: 30,
-    legacyMenuId: 'LM102',
-    legacyMapId: 'LM102',
-    sourceMenu: '세무접수관리',
-    legacyTables: ['tbfin_cost', 'tbfin_cost_item', 'tbbil_taxbil'],
-    targetEntities: ['expenses', 'expenseItems', 'taxInvoices'],
-    purpose: '세무 증빙 접수와 비용 처리 상태를 관리합니다.',
+    legacyMenuId: 'UNI-COST',
+    legacyMapId: 'UNI-COST',
+    sourceMenu: 'Cost',
+    legacyTables: ['tbfin_cost', 'tbfin_cost_item'],
+    targetEntities: ['expenses', 'expenseItems'],
+    purpose: '비용과 비용 항목을 관리합니다.',
     status: 'planned'
   },
   {
@@ -413,229 +400,6 @@ const operationsItems: UniErpMenuItem[] = [
   }
 ];
 
-const commerceItems: UniErpMenuItem[] = [
-  {
-    code: 'commerce-shop-products',
-    label: '쇼핑몰 상품',
-    href: '/commerce?legacy=LM017',
-    sortOrder: 10,
-    legacyMenuId: 'LM017',
-    legacyMapId: 'LM017',
-    sourceMenu: 'Shop Products',
-    legacyTables: ['tbshp_product', 'tbshp_product_option', 'tbprd_product'],
-    targetEntities: ['commerceProducts', 'commerceProductOptions', 'products'],
-    purpose: '쇼핑몰 노출 상품, 옵션, 가격을 ERP 상품과 연결합니다.',
-    status: 'reference'
-  },
-  {
-    code: 'commerce-shop-orders',
-    label: '쇼핑몰 주문',
-    href: '/commerce?legacy=LM018',
-    sortOrder: 20,
-    legacyMenuId: 'LM018',
-    legacyMapId: 'LM018',
-    sourceMenu: 'Shop Orders',
-    legacyTables: ['tbshp_order', 'tbshp_order_item', 'tbshp_pay', 'tbshp_delivery'],
-    targetEntities: ['commerceOrders', 'commerceOrderItems', 'payments', 'deliveries'],
-    purpose: '온라인 주문, 결제, 배송 상태를 관리합니다.',
-    status: 'reference'
-  }
-];
-
-const contentItems: UniErpMenuItem[] = [
-  {
-    code: 'content-bbs',
-    label: '게시판관리',
-    href: '/content?legacy=LM010',
-    sortOrder: 10,
-    legacyMenuId: 'LM010',
-    legacyMapId: 'LM010',
-    sourceMenu: 'BBS Admin',
-    legacyTables: ['tbcom_bbs2', 'tbcom_bbs_article2', 'tbcom_bbs_reply2'],
-    targetEntities: ['boards', 'boardPosts', 'boardComments'],
-    purpose: '공지, 자료실, 스토리 등 게시판과 게시글을 관리합니다.',
-    status: 'reference'
-  },
-  {
-    code: 'content-popup-notices',
-    label: '팝업공지',
-    href: '/content?legacy=LM011',
-    sortOrder: 20,
-    legacyMenuId: 'LM011',
-    legacyMapId: 'LM011',
-    sourceMenu: 'Popup Notices',
-    legacyTables: ['tbcom_popup', 'tbcom_attach'],
-    targetEntities: ['popupNotices', 'attachments'],
-    purpose: '사이트/ERP 공지 팝업과 첨부 이미지를 관리합니다.',
-    status: 'reference'
-  },
-  {
-    code: 'content-banners',
-    label: '배너관리',
-    href: '/content?legacy=LM012',
-    sortOrder: 30,
-    legacyMenuId: 'LM012',
-    legacyMapId: 'LM012',
-    sourceMenu: 'Banners',
-    legacyTables: ['tbcom_banner', 'tbcom_attach'],
-    targetEntities: ['banners', 'attachments'],
-    purpose: '배너 위치, 이미지, 링크, 노출 기간을 관리합니다.',
-    status: 'reference'
-  },
-  {
-    code: 'content-pages',
-    label: '콘텐츠관리',
-    href: '/content?legacy=LM114',
-    sortOrder: 40,
-    legacyMenuId: 'LM114',
-    legacyMapId: 'LM114',
-    sourceMenu: '콘텐츠관리',
-    legacyTables: ['tbcom_contents', 'tbcom_attach'],
-    targetEntities: ['contents', 'attachments'],
-    purpose: '정적/반정적 콘텐츠와 파일을 관리합니다.',
-    status: 'reference'
-  },
-  {
-    code: 'content-story-board',
-    label: '공지/스토리 게시판',
-    href: '/content?legacy=LM116',
-    sortOrder: 50,
-    legacyMenuId: 'LM116',
-    legacyMapId: 'LM116',
-    sourceMenu: '공지/스토리 게시판',
-    legacyTables: ['tbcom_bbs2', 'tbcom_bbs_article2'],
-    targetEntities: ['boards', 'boardPosts'],
-    purpose: '공지와 스토리성 게시글을 운영합니다.',
-    status: 'reference'
-  }
-];
-
-const collaborationItems: UniErpMenuItem[] = [
-  {
-    code: 'collaboration-sms-send',
-    label: 'SMS 발신',
-    href: '/collaboration?legacy=LM105',
-    sortOrder: 10,
-    legacyMenuId: 'LM105',
-    legacyMapId: 'LM105',
-    sourceMenu: 'SMS 발신',
-    legacyTables: ['tbcom_sms', 'tbcom_sms_template', 'tbcrm_cust_info'],
-    targetEntities: ['messages', 'messageTemplates', 'customers'],
-    purpose: '고객/직원 대상 업무 메시지를 발송합니다.',
-    status: 'reference'
-  },
-  {
-    code: 'collaboration-sms-log',
-    label: 'SMS 발신이력',
-    href: '/collaboration?legacy=LM106',
-    sortOrder: 20,
-    legacyMenuId: 'LM106',
-    legacyMapId: 'LM106',
-    sourceMenu: 'SMS 발신이력',
-    legacyTables: ['tbcom_sms_log'],
-    targetEntities: ['messageLogs'],
-    purpose: '발송 성공/실패와 수신자를 추적합니다.',
-    status: 'reference'
-  },
-  {
-    code: 'collaboration-sms-template',
-    label: 'SMS 템플릿',
-    href: '/collaboration?legacy=LM107',
-    sortOrder: 30,
-    legacyMenuId: 'LM107',
-    legacyMapId: 'LM107',
-    sourceMenu: 'SMS 템플릿',
-    legacyTables: ['tbcom_sms_template'],
-    targetEntities: ['messageTemplates'],
-    purpose: '반복 발송 문구와 변수 치환 규칙을 관리합니다.',
-    status: 'reference'
-  },
-  {
-    code: 'collaboration-meetings',
-    label: '회의관리',
-    href: '/collaboration?legacy=LM108',
-    sortOrder: 40,
-    legacyMenuId: 'LM108',
-    legacyMapId: 'LM108',
-    sourceMenu: 'ZOOM 회의',
-    legacyTables: ['tbzom_meeting', 'tbzom_channel'],
-    targetEntities: ['meetings', 'meetingChannels'],
-    purpose: '화상회의 예약과 회의 링크를 관리합니다.',
-    status: 'reference'
-  },
-  {
-    code: 'collaboration-meeting-users',
-    label: '회의 사용자',
-    href: '/collaboration?legacy=LM109',
-    sortOrder: 50,
-    legacyMenuId: 'LM109',
-    legacyMapId: 'LM109',
-    sourceMenu: 'ZOOM 사용자',
-    legacyTables: ['tbzom_user', 'tbcom_user2'],
-    targetEntities: ['meetingUsers', 'users'],
-    purpose: '회의 계정과 ERP 사용자를 연결합니다.',
-    status: 'reference'
-  },
-  {
-    code: 'collaboration-meeting-channels',
-    label: '회의 채널',
-    href: '/collaboration?legacy=LM110',
-    sortOrder: 60,
-    legacyMenuId: 'LM110',
-    legacyMapId: 'LM110',
-    sourceMenu: 'ZOOM 채널',
-    legacyTables: ['tbzom_channel'],
-    targetEntities: ['meetingChannels'],
-    purpose: '회의 채널과 기본 회의 설정을 관리합니다.',
-    status: 'reference'
-  }
-];
-
-const analyticsItems: UniErpMenuItem[] = [
-  {
-    code: 'analytics-custom-charts',
-    label: '맞춤 차트',
-    href: '/analytics?legacy=LM111',
-    sortOrder: 10,
-    legacyMenuId: 'LM111',
-    legacyMapId: 'LM111',
-    sourceMenu: '맞춤 차트',
-    legacyTables: ['tbsum_mychart', 'tbsum_mychart_data'],
-    targetEntities: ['savedCharts', 'savedChartData'],
-    purpose: '사용자 정의 차트와 데이터셋을 관리합니다.',
-    status: 'ready'
-  },
-  {
-    code: 'analytics-commerce-sales',
-    label: '쇼핑몰 매출차트',
-    href: '/analytics?legacy=LM112',
-    sortOrder: 20,
-    legacyMenuId: 'LM112',
-    legacyMapId: 'LM112',
-    sourceMenu: '쇼핑몰 매출차트',
-    legacyTables: ['tbshp_order', 'tbshp_pay'],
-    targetEntities: ['commerceOrders', 'payments', 'savedCharts'],
-    purpose: '쇼핑몰 매출과 결제 흐름을 차트로 분석합니다.',
-    status: 'reference'
-  }
-];
-
-const automationItems: UniErpMenuItem[] = [
-  {
-    code: 'automation-jobs',
-    label: '자동예약작업',
-    href: '/automation?legacy=LM113',
-    sortOrder: 10,
-    legacyMenuId: 'LM113',
-    legacyMapId: 'LM113',
-    sourceMenu: '자동예약작업',
-    legacyTables: ['tbcom_job_schedule', 'tbcom_task'],
-    targetEntities: ['automationJobs', 'tasks'],
-    purpose: '반복 실행 작업, 예약 실행 시간, 실행 결과를 관리합니다.',
-    status: 'reference'
-  }
-];
-
 export const uniErpModules: UniErpModule[] = [
   {
     code: 'dashboard',
@@ -648,9 +412,9 @@ export const uniErpModules: UniErpModule[] = [
     title: 'UniPlan ERP 홈',
     description: 'AI 질의, 홈 카드, 핵심 지표를 한 화면에서 연결합니다.',
     metrics: [
-      { label: '핵심 모듈', value: 10 },
-      { label: '관리 메뉴', value: 41 },
-      { label: '참조 테이블군', value: 18 },
+      { label: '핵심 모듈', value: 6 },
+      { label: '관리 메뉴', value: 28 },
+      { label: '참조 테이블군', value: 12 },
       { label: 'AI 분석', value: 'ON' }
     ],
     sections: [
@@ -776,125 +540,10 @@ export const uniErpModules: UniErpModule[] = [
     children: operationsItems
   },
   {
-    code: 'commerce',
-    label: 'Commerce',
-    href: '/commerce',
-    sortOrder: 70,
-    legacyMenuId: 'LSHOP',
-    legacyMapId: 'LSHOP',
-    eyebrow: 'Commerce',
-    title: '쇼핑몰과 주문 관리',
-    description: '온라인 상품, 주문, 결제, 배송 데이터를 ERP 상품/재고와 연결할 준비 영역입니다.',
-    metrics: [
-      { label: '상품', value: 1 },
-      { label: '주문', value: 1 },
-      { label: '결제/배송', value: 2 },
-      { label: '우선도', value: '참조' }
-    ],
-    sections: [
-      { title: '쇼핑몰 상품', body: '온라인 노출 상품과 ERP 상품 원장을 연결합니다.' },
-      { title: '주문', body: '주문, 결제, 배송 상태를 판매/재고 흐름으로 보냅니다.' },
-      { title: '분석', body: '쇼핑몰 매출 차트와 고객 구매 흐름을 분석합니다.' }
-    ],
-    children: commerceItems
-  },
-  {
-    code: 'content',
-    label: 'Content',
-    href: '/content',
-    sortOrder: 80,
-    legacyMenuId: 'LCONT',
-    legacyMapId: 'LCONT',
-    eyebrow: 'Content',
-    title: '콘텐츠와 게시판 관리',
-    description: '게시판, 팝업, 배너, 콘텐츠를 ERP/홈페이지 공통 운영 자산으로 정리합니다.',
-    metrics: [
-      { label: '게시판', value: 2 },
-      { label: '팝업/배너', value: 2 },
-      { label: '콘텐츠', value: 1 },
-      { label: '우선도', value: '참조' }
-    ],
-    sections: [
-      { title: '게시판', body: '공지, 스토리, 자료실성 콘텐츠를 관리합니다.' },
-      { title: '팝업/배너', body: '노출 기간과 링크를 가진 운영 배너를 관리합니다.' },
-      { title: '첨부', body: '파일과 이미지는 공통 첨부 구조로 연결합니다.' }
-    ],
-    children: contentItems
-  },
-  {
-    code: 'collaboration',
-    label: 'Collaboration',
-    href: '/collaboration',
-    sortOrder: 90,
-    legacyMenuId: 'LCOMM',
-    legacyMapId: 'LCOMM',
-    eyebrow: 'Collaboration',
-    title: '메시징과 회의 관리',
-    description: 'SMS/알림과 회의 연동을 업무 이벤트와 연결합니다.',
-    metrics: [
-      { label: 'SMS', value: 3 },
-      { label: '회의', value: 3 },
-      { label: '템플릿', value: 1 },
-      { label: '우선도', value: '참조' }
-    ],
-    sections: [
-      { title: '메시징', body: '발송, 이력, 템플릿을 고객/업무 이벤트와 연결합니다.' },
-      { title: '회의', body: '회의, 사용자, 채널을 ERP 일정과 연결합니다.' },
-      { title: '자동화 후보', body: '반복 알림과 회의 예약은 자동화 작업으로 확장합니다.' }
-    ],
-    children: collaborationItems
-  },
-  {
-    code: 'analytics',
-    label: 'Analytics',
-    href: '/analytics',
-    sortOrder: 100,
-    legacyMenuId: 'LSTAT',
-    legacyMapId: 'LSTAT',
-    eyebrow: 'Analytics',
-    title: '통계와 맞춤 차트',
-    description: '홈 카드와 맞춤 차트, 쇼핑몰 매출 차트를 Uni 차트 라이브러리로 흡수합니다.',
-    metrics: [
-      { label: '맞춤 차트', value: 1 },
-      { label: '매출 차트', value: 1 },
-      { label: 'Uni Charts', value: 'ON' },
-      { label: '우선도', value: 3 }
-    ],
-    sections: [
-      { title: '맞춤 차트', body: '사용자 정의 데이터셋과 차트 구성을 저장합니다.' },
-      { title: '매출 차트', body: '쇼핑몰/ERP 매출 데이터를 차트로 분석합니다.' },
-      { title: 'AI 분석', body: '저장된 차트 정의를 자연어 분석 결과와 연결합니다.' }
-    ],
-    children: analyticsItems
-  },
-  {
-    code: 'automation',
-    label: 'Automation',
-    href: '/automation',
-    sortOrder: 110,
-    legacyMenuId: 'LAUTO',
-    legacyMapId: 'LAUTO',
-    eyebrow: 'Automation',
-    title: '자동화와 예약 작업',
-    description: '반복 실행 작업, 알림, 데이터 동기화를 관리하는 영역입니다.',
-    metrics: [
-      { label: '예약작업', value: 1 },
-      { label: '연결 후보', value: 4 },
-      { label: '실행 이력', value: '예정' },
-      { label: '우선도', value: '참조' }
-    ],
-    sections: [
-      { title: '예약 실행', body: '정해진 주기로 실행되는 업무 작업을 관리합니다.' },
-      { title: '업무 연결', body: '청구, 메시지, 차트, 재고 동기화와 연결할 수 있습니다.' },
-      { title: '안전장치', body: '실행 전 승인, 실패 이력, 재시도 정책을 분리합니다.' }
-    ],
-    children: automationItems
-  },
-  {
     code: 'system',
     label: 'System',
     href: '/system',
-    sortOrder: 120,
+    sortOrder: 70,
     legacyMenuId: 'LSYS',
     legacyMapId: 'LSYS',
     eyebrow: 'System',

@@ -273,6 +273,28 @@ async function main() {
     }
   }
 
+  const activeMenuCodes = [
+    ...navigationSeeds.map((seed) => seed.code),
+    ...childMenuGroups.flatMap((group) => group.items.map((item) => item.code))
+  ];
+  const activeMenuNodeIds = activeMenuCodes.map((code) => `menu-node-${code}`);
+
+  await prisma.menu.updateMany({
+    where: {
+      companyId,
+      code: { notIn: activeMenuCodes }
+    },
+    data: { active: false }
+  });
+
+  await prisma.menuNode.updateMany({
+    where: {
+      companyId,
+      id: { notIn: activeMenuNodeIds }
+    },
+    data: { active: false }
+  });
+
   const employees = await Promise.all([
     prisma.employee.upsert({
       where: { companyId_employeeNo: { companyId, employeeNo: 'E001' } },
