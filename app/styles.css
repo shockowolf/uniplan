@@ -94,21 +94,6 @@ a {
   background: linear-gradient(90deg, rgba(95, 211, 255, .18), rgba(124, 92, 255, .12));
   border-color: rgba(95, 211, 255, .45);
 }
-.nav-link {
-  position: relative;
-}
-.nav-link.active::before {
-  content: "";
-  position: absolute;
-  top: 50%;
-  left: 7px;
-  width: 3px;
-  height: 20px;
-  border-radius: 999px;
-  background: var(--accent);
-  box-shadow: 0 0 14px rgba(95, 211, 255, .7);
-  transform: translateY(-50%);
-}
 .nav-toggle {
   align-items: center;
   display: flex;
