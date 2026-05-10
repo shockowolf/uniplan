@@ -409,6 +409,9 @@ th { color: var(--muted); font-size: 13px; }
   overflow-x: auto;
 }
 .erp-grid-sort {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   width: 100%;
   border: 0;
   border-radius: 0;
@@ -419,6 +422,17 @@ th { color: var(--muted); font-size: 13px; }
 }
 .erp-grid-sort:hover {
   color: var(--text);
+}
+.erp-grid-drag-handle {
+  color: var(--accent);
+  cursor: grab;
+  font-size: 12px;
+  letter-spacing: 0;
+  opacity: .72;
+}
+.erp-grid-dragging {
+  outline: 1px dashed var(--accent);
+  outline-offset: -5px;
 }
 .erp-grid-row-action {
   width: 72px;
