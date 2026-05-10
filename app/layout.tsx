@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { AppSidebar } from '@/components/AppSidebar';
+import { getSidebarMenuItems } from '@/lib/navigation';
 import './styles.css';
 
 export const metadata: Metadata = {
@@ -7,12 +8,14 @@ export const metadata: Metadata = {
   description: 'AI-first ERP analyst prototype'
 };
 
-export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+  const menuItems = await getSidebarMenuItems();
+
   return (
     <html lang="ko">
       <body>
         <main className="dashboard-shell">
-          <AppSidebar />
+          <AppSidebar menuItems={menuItems} />
           {children}
         </main>
       </body>

@@ -16,16 +16,168 @@ async function main() {
     }
   });
 
-  await prisma.user.upsert({
-    where: { companyId_email: { companyId, email: 'admin@uniplan.local' } },
-    update: {},
+  const domain = await prisma.domain.upsert({
+    where: { companyId_code: { companyId, code: 'ERP' } },
+    update: {
+      name: 'UniPlan ERP',
+      domainName: 'uniplan.local',
+      domainType: 'ERP',
+      active: true
+    },
     create: {
       companyId,
+      code: 'ERP',
+      name: 'UniPlan ERP',
+      domainName: 'uniplan.local',
+      domainType: 'ERP'
+    }
+  });
+
+  const adminRole = await prisma.role.upsert({
+    where: { companyId_code: { companyId, code: 'admin' } },
+    update: {
+      domainId: domain.id,
+      name: '관리자',
+      description: '전체 메뉴와 기능을 관리하는 역할',
+      active: true
+    },
+    create: {
+      companyId,
+      domainId: domain.id,
+      code: 'admin',
+      name: '관리자',
+      description: '전체 메뉴와 기능을 관리하는 역할'
+    }
+  });
+
+  const staffRole = await prisma.role.upsert({
+    where: { companyId_code: { companyId, code: 'staff' } },
+    update: {
+      domainId: domain.id,
+      name: '사용자',
+      description: 'ERP 주요 메뉴를 조회하는 일반 사용자 역할',
+      active: true
+    },
+    create: {
+      companyId,
+      domainId: domain.id,
+      code: 'staff',
+      name: '사용자',
+      description: 'ERP 주요 메뉴를 조회하는 일반 사용자 역할'
+    }
+  });
+
+  const adminUser = await prisma.user.upsert({
+    where: { companyId_email: { companyId, email: 'admin@uniplan.local' } },
+    update: { domainId: domain.id },
+    create: {
+      companyId,
+      domainId: domain.id,
       email: 'admin@uniplan.local',
       passwordHash: 'demo-only',
       name: '관리자'
     }
   });
+
+  await prisma.userRole.upsert({
+    where: { userId_roleId: { userId: adminUser.id, roleId: adminRole.id } },
+    update: {},
+    create: {
+      userId: adminUser.id,
+      roleId: adminRole.id
+    }
+  });
+
+  const navigationSeeds = [
+    { code: 'dashboard', label: 'Dashboard', href: '/', sortOrder: 10, legacyMenuId: 'dashboard', legacyMapId: 'dashboard' },
+    { code: 'sales', label: 'Sales', href: '/sales', sortOrder: 20, legacyMenuId: 'sales', legacyMapId: 'sales' },
+    { code: 'customers', label: 'Customers', href: '/customers', sortOrder: 30, legacyMenuId: 'customers', legacyMapId: 'customers' },
+    { code: 'inventory', label: 'Inventory', href: '/inventory', sortOrder: 40, legacyMenuId: 'inventory', legacyMapId: 'inventory' },
+    { code: 'finance', label: 'Finance', href: '/finance', sortOrder: 50, legacyMenuId: 'finance', legacyMapId: 'finance' },
+    { code: 'operations', label: 'Operations', href: '/operations', sortOrder: 60, legacyMenuId: 'operations', legacyMapId: 'operations' }
+  ];
+
+  for (const seed of navigationSeeds) {
+    const menu = await prisma.menu.upsert({
+      where: { companyId_code: { companyId, code: seed.code } },
+      update: {
+        label: seed.label,
+        href: seed.href,
+        sortOrder: seed.sortOrder,
+        legacyMenuId: seed.legacyMenuId,
+        active: true
+      },
+      create: {
+        companyId,
+        code: seed.code,
+        label: seed.label,
+        href: seed.href,
+        sortOrder: seed.sortOrder,
+        legacyMenuId: seed.legacyMenuId
+      }
+    });
+
+    const menuNode = await prisma.menuNode.upsert({
+      where: { id: `menu-node-${seed.code}` },
+      update: {
+        companyId,
+        domainId: domain.id,
+        menuId: menu.id,
+        parentId: null,
+        label: seed.label,
+        href: seed.href,
+        sortOrder: seed.sortOrder,
+        legacyMapId: seed.legacyMapId,
+        active: true
+      },
+      create: {
+        id: `menu-node-${seed.code}`,
+        companyId,
+        domainId: domain.id,
+        menuId: menu.id,
+        label: seed.label,
+        href: seed.href,
+        sortOrder: seed.sortOrder,
+        legacyMapId: seed.legacyMapId
+      }
+    });
+
+    await prisma.roleMenuPermission.upsert({
+      where: { roleId_menuNodeId: { roleId: adminRole.id, menuNodeId: menuNode.id } },
+      update: {
+        canRead: true,
+        canCreate: true,
+        canUpdate: true,
+        canDelete: true,
+        canAdmin: true
+      },
+      create: {
+        roleId: adminRole.id,
+        menuNodeId: menuNode.id,
+        canRead: true,
+        canCreate: true,
+        canUpdate: true,
+        canDelete: true,
+        canAdmin: true
+      }
+    });
+
+    await prisma.roleMenuPermission.upsert({
+      where: { roleId_menuNodeId: { roleId: staffRole.id, menuNodeId: menuNode.id } },
+      update: {
+        canRead: true,
+        canCreate: false,
+        canUpdate: false,
+        canDelete: false,
+        canAdmin: false
+      },
+      create: {
+        roleId: staffRole.id,
+        menuNodeId: menuNode.id,
+        canRead: true
+      }
+    });
+  }
 
   const employees = await Promise.all([
     prisma.employee.upsert({
@@ -162,7 +314,14 @@ async function main() {
     ]
   });
 
-  console.log('Seed complete:', { companyId, customers: customers.length, products: products.length, invoices: invoiceSeeds.length, employees: employees.length });
+  console.log('Seed complete:', {
+    companyId,
+    customers: customers.length,
+    products: products.length,
+    invoices: invoiceSeeds.length,
+    employees: employees.length,
+    menus: navigationSeeds.length
+  });
 }
 
 main()

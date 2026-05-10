@@ -14,23 +14,28 @@ model Company {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  users             User[]
-  customers         Customer[]
-  employees         Employee[]
-  productCategories ProductCategory[]
-  products          Product[]
-  warehouses        Warehouse[]
-  inventoryBalances InventoryBalance[]
+  users              User[]
+  domains            Domain[]
+  roles              Role[]
+  menus              Menu[]
+  menuNodes          MenuNode[]
+  customers          Customer[]
+  employees          Employee[]
+  productCategories  ProductCategory[]
+  products           Product[]
+  warehouses         Warehouse[]
+  inventoryBalances  InventoryBalance[]
   inventoryMovements InventoryMovement[]
-  salesOrders       SalesOrder[]
-  invoices          Invoice[]
-  consultations     Consultation[]
-  serviceCases      ServiceCase[]
+  salesOrders        SalesOrder[]
+  invoices           Invoice[]
+  consultations      Consultation[]
+  serviceCases       ServiceCase[]
 }
 
 model User {
   id           String   @id @default(cuid())
   companyId    String
+  domainId     String?
   email        String
   passwordHash String
   name         String
@@ -38,23 +43,141 @@ model User {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  company Company @relation(fields: [companyId], references: [id])
+  company   Company    @relation(fields: [companyId], references: [id])
+  domain    Domain?    @relation(fields: [domainId], references: [id])
+  userRoles UserRole[]
 
   @@unique([companyId, email])
 }
 
-model Customer {
+model Domain {
+  id         String   @id @default(cuid())
+  companyId  String
+  code       String
+  name       String
+  domainName String
+  domainType String   @default("ERP")
+  active     Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  company   Company    @relation(fields: [companyId], references: [id])
+  users     User[]
+  roles     Role[]
+  menuNodes MenuNode[]
+
+  @@unique([companyId, code])
+  @@unique([companyId, domainName])
+}
+
+model Role {
   id          String   @id @default(cuid())
   companyId   String
+  domainId    String?
   code        String
   name        String
-  grade       String?
-  status      String   @default("active")
-  phone       String?
-  email       String?
-  memo        String?
+  description String?
+  active      Boolean  @default(true)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+
+  company     Company              @relation(fields: [companyId], references: [id])
+  domain      Domain?              @relation(fields: [domainId], references: [id])
+  userRoles   UserRole[]
+  permissions RoleMenuPermission[]
+
+  @@unique([companyId, code])
+}
+
+model UserRole {
+  id        String   @id @default(cuid())
+  userId    String
+  roleId    String
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, roleId])
+}
+
+model Menu {
+  id           String   @id @default(cuid())
+  companyId    String
+  code         String
+  label        String
+  href         String?
+  domainType   String   @default("ERP")
+  active       Boolean  @default(true)
+  sortOrder    Int      @default(0)
+  legacyMenuId String?
+  legacyTable  String   @default("tbcom_menu")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  company Company    @relation(fields: [companyId], references: [id])
+  nodes   MenuNode[]
+
+  @@unique([companyId, code])
+  @@index([companyId, active, sortOrder])
+}
+
+model MenuNode {
+  id          String   @id @default(cuid())
+  companyId   String
+  domainId    String?
+  menuId      String?
+  parentId    String?
+  label       String
+  href        String?
+  sortOrder   Int      @default(0)
+  active      Boolean  @default(true)
+  legacyMapId String?
+  legacyTable String   @default("tbcom_menu_map")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  company     Company              @relation(fields: [companyId], references: [id])
+  domain      Domain?              @relation(fields: [domainId], references: [id])
+  menu        Menu?                @relation(fields: [menuId], references: [id])
+  parent      MenuNode?            @relation("MenuTree", fields: [parentId], references: [id])
+  children    MenuNode[]           @relation("MenuTree")
+  permissions RoleMenuPermission[]
+
+  @@index([companyId, domainId, parentId, sortOrder])
+  @@index([companyId, active])
+}
+
+model RoleMenuPermission {
+  id         String   @id @default(cuid())
+  roleId     String
+  menuNodeId String
+  canRead    Boolean  @default(true)
+  canCreate  Boolean  @default(false)
+  canUpdate  Boolean  @default(false)
+  canDelete  Boolean  @default(false)
+  canAdmin   Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  role     Role     @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  menuNode MenuNode @relation(fields: [menuNodeId], references: [id], onDelete: Cascade)
+
+  @@unique([roleId, menuNodeId])
+}
+
+model Customer {
+  id        String   @id @default(cuid())
+  companyId String
+  code      String
+  name      String
+  grade     String?
+  status    String   @default("active")
+  phone     String?
+  email     String?
+  memo      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   company       Company        @relation(fields: [companyId], references: [id])
   invoices      Invoice[]
@@ -85,12 +208,12 @@ model Employee {
 }
 
 model ProductCategory {
-  id          String   @id @default(cuid())
+  id          String  @id @default(cuid())
   companyId   String
   code        String
   name        String
   description String?
-  active      Boolean  @default(true)
+  active      Boolean @default(true)
 
   company  Company   @relation(fields: [companyId], references: [id])
   products Product[]
@@ -112,13 +235,13 @@ model Product {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
-  company             Company             @relation(fields: [companyId], references: [id])
-  category            ProductCategory?    @relation(fields: [categoryId], references: [id])
-  inventoryBalances   InventoryBalance[]
-  inventoryMovements  InventoryMovement[]
-  salesOrderItems     SalesOrderItem[]
-  invoiceItems        InvoiceItem[]
-  serviceCases        ServiceCase[]
+  company            Company             @relation(fields: [companyId], references: [id])
+  category           ProductCategory?    @relation(fields: [categoryId], references: [id])
+  inventoryBalances  InventoryBalance[]
+  inventoryMovements InventoryMovement[]
+  salesOrderItems    SalesOrderItem[]
+  invoiceItems       InvoiceItem[]
+  serviceCases       ServiceCase[]
 
   @@unique([companyId, code])
   @@index([companyId, name])
@@ -132,9 +255,9 @@ model Warehouse {
   location  String?
   active    Boolean @default(true)
 
-  company             Company             @relation(fields: [companyId], references: [id])
-  inventoryBalances   InventoryBalance[]
-  inventoryMovements  InventoryMovement[]
+  company            Company             @relation(fields: [companyId], references: [id])
+  inventoryBalances  InventoryBalance[]
+  inventoryMovements InventoryMovement[]
 
   @@unique([companyId, code])
 }
@@ -200,7 +323,7 @@ model SalesOrder {
 }
 
 model SalesOrderItem {
-  id           String @id @default(cuid())
+  id           String  @id @default(cuid())
   salesOrderId String
   productId    String?
   productName  String
@@ -215,22 +338,22 @@ model SalesOrderItem {
 }
 
 model Invoice {
-  id              String   @id @default(cuid())
+  id              String    @id @default(cuid())
   companyId       String
   invoiceNo       String
   customerId      String
   salesOrderId    String?
   issueDate       DateTime
   dueDate         DateTime?
-  status          String   @default("issued")
-  supplyAmount    Int      @default(0)
-  taxAmount       Int      @default(0)
-  totalAmount     Int      @default(0)
-  paidAmount      Int      @default(0)
-  remainingAmount Int      @default(0)
+  status          String    @default("issued")
+  supplyAmount    Int       @default(0)
+  taxAmount       Int       @default(0)
+  totalAmount     Int       @default(0)
+  paidAmount      Int       @default(0)
+  remainingAmount Int       @default(0)
   memo            String?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
   company    Company       @relation(fields: [companyId], references: [id])
   customer   Customer      @relation(fields: [customerId], references: [id])
@@ -243,7 +366,7 @@ model Invoice {
 }
 
 model InvoiceItem {
-  id           String @id @default(cuid())
+  id           String  @id @default(cuid())
   invoiceId    String
   productId    String?
   itemName     String
@@ -253,7 +376,7 @@ model InvoiceItem {
   taxAmount    Int
   totalAmount  Int
 
-  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  invoice Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
   product Product? @relation(fields: [productId], references: [id])
 }
 
@@ -287,17 +410,17 @@ model Consultation {
 }
 
 model ServiceCase {
-  id         String   @id @default(cuid())
-  companyId  String
-  customerId String?
-  productId  String?
-  status     String   @default("received")
-  symptom    String
-  result     String?
-  receivedAt DateTime
-  dueAt      DateTime?
+  id          String    @id @default(cuid())
+  companyId   String
+  customerId  String?
+  productId   String?
+  status      String    @default("received")
+  symptom     String
+  result      String?
+  receivedAt  DateTime
+  dueAt       DateTime?
   completedAt DateTime?
-  memo       String?
+  memo        String?
 
   company  Company   @relation(fields: [companyId], references: [id])
   customer Customer? @relation(fields: [customerId], references: [id])

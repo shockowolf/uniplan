@@ -1,0 +1,67 @@
+import { demoCompanyId, prisma } from '@/lib/db';
+
+export type SidebarMenuItem = {
+  label: string;
+  href: string;
+};
+
+export const fallbackSidebarMenuItems: SidebarMenuItem[] = [
+  { label: 'Dashboard', href: '/' },
+  { label: 'Sales', href: '/sales' },
+  { label: 'Customers', href: '/customers' },
+  { label: 'Inventory', href: '/inventory' },
+  { label: 'Finance', href: '/finance' },
+  { label: 'Operations', href: '/operations' }
+];
+
+export async function getSidebarMenuItems(companyId = demoCompanyId, roleCode = 'admin'): Promise<SidebarMenuItem[]> {
+  try {
+    const role = await prisma.role.findFirst({
+      where: {
+        companyId,
+        code: roleCode,
+        active: true
+      },
+      select: { id: true }
+    });
+
+    const menuNodes = await prisma.menuNode.findMany({
+      where: {
+        companyId,
+        active: true,
+        parentId: null,
+        ...(role
+          ? {
+              permissions: {
+                some: {
+                  roleId: role.id,
+                  canRead: true
+                }
+              }
+            }
+          : {})
+      },
+      include: {
+        menu: {
+          select: {
+            href: true,
+            active: true
+          }
+        }
+      },
+      orderBy: [{ sortOrder: 'asc' }, { label: 'asc' }]
+    });
+
+    const items = menuNodes
+      .filter((node) => node.menu?.active ?? true)
+      .map((node) => ({
+        label: node.label,
+        href: node.href ?? node.menu?.href ?? '/'
+      }));
+
+    return items.length > 0 ? items : fallbackSidebarMenuItems;
+  } catch (error) {
+    console.warn('Falling back to static sidebar menu:', error);
+    return fallbackSidebarMenuItems;
+  }
+}

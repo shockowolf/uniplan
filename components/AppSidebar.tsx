@@ -2,15 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-
-const menuItems = [
-  { label: 'Dashboard', href: '/' },
-  { label: 'Sales', href: '/sales' },
-  { label: 'Customers', href: '/customers' },
-  { label: 'Inventory', href: '/inventory' },
-  { label: 'Finance', href: '/finance' },
-  { label: 'Operations', href: '/operations' }
-];
+import type { SidebarMenuItem } from '@/lib/navigation';
 
 const examples = [
   { label: '매출 요약', text: '이번 달 매출 어때?' },
@@ -23,7 +15,11 @@ const examples = [
   { label: '전체 현황', text: '오늘 사업 현황 요약' }
 ];
 
-export function AppSidebar() {
+type AppSidebarProps = {
+  menuItems: SidebarMenuItem[];
+};
+
+export function AppSidebar({ menuItems }: AppSidebarProps) {
   const pathname = usePathname();
 
   return (
@@ -38,7 +34,7 @@ export function AppSidebar() {
 
       <nav aria-label="주요 메뉴" className="nav-menu">
         {menuItems.map((item) => (
-          <Link className={pathname === item.href ? 'nav-link active' : 'nav-link'} href={item.href} key={item.href}>
+          <Link className={pathname === item.href ? 'nav-link active' : 'nav-link'} href={item.href} key={`${item.href}-${item.label}`}>
             {item.label}
           </Link>
         ))}
