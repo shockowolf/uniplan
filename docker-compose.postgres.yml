@@ -1,0 +1,20 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: uniplan-postgres
+    environment:
+      POSTGRES_USER: uniplan
+      POSTGRES_PASSWORD: uniplan_password
+      POSTGRES_DB: uniplan_dev
+    ports:
+      - "5432:5432"
+    volumes:
+      - uniplan_pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U uniplan -d uniplan_dev"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  uniplan_pg_data:

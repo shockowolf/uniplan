@@ -1,5 +1,23 @@
-# macOS
-.DS_Store
+# dependencies
+node_modules/
+
+# Next.js
+.next/
+out/
+
+# Prisma/local DB
+prisma/dev.db
+prisma/*.db
+prisma/*.sqlite
+prisma/*.sqlite3
+
+# env/secrets
+.env
+.env.*
+!.env.postgres.example
+
+# TypeScript
+*.tsbuildinfo
 
 # local/editor state
 .idea/
@@ -7,14 +25,11 @@
 *.swp
 *.tmp
 
-# secrets and local env
-.env
-.env.*
-*.key
-*.pem
-
-# generated bundles/exports
+# generated outputs
 dist/
 build/
 *.zip
 *.tar.gz
+
+# macOS
+.DS_Store

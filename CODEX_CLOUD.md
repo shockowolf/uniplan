@@ -1,29 +1,55 @@
 # Codex Cloud Setup
 
-## Repository
-
 Use this GitHub repository as the Codex Cloud project for `uniplan`.
 
 ## Setup
 
-No dependency installation is required for the current documentation-only state.
+```bash
+npm install
+```
 
 ## Verification
 
-For now, verification is a documentation consistency pass:
+Primary check:
 
-- Read `README.md`
-- Read `UNIPLAN_MOVE_BRIEF.md`
-- Confirm updated docs do not contradict `UNIPLAN_MVP.md`, `UNIPLAN_ARCHITECTURE.md`, or `UNIPLAN_DATA_MODEL.md`
+```bash
+npm run typecheck
+```
 
-If implementation code is added later, replace this section with real setup/test commands.
+Full local check when SQLite and Prisma generation are available:
+
+```bash
+npm run db:reset
+npm run build
+```
+
+## Runtime
+
+Local development:
+
+```bash
+npm run db:use:sqlite
+npm run db:reset
+npm run dev
+```
+
+PostgreSQL prep:
+
+```bash
+npm run db:use:postgres
+docker compose -f docker-compose.postgres.yml up -d
+npm run db:reset
+```
 
 ## Security
 
 Do not commit:
 
 - API keys or tokens
-- `.env*`
+- `.env`
 - private customer data
 - raw database dumps
 - generated archive bundles
+- Prisma local SQLite DB files
+
+The AI query path must remain template-based and read-only for the MVP.
