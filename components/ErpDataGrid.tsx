@@ -219,7 +219,6 @@ export function ErpDataGrid<TData extends Record<string, string | number | null 
             {visibleOrderedColumns.map((column) => (
               <col key={column.id} style={{ width: column.getSize() }} />
             ))}
-            <col className="erp-grid-action-col" />
           </colgroup>
           <thead>
             {table.getHeaderGroups().map((headerGroup) => (
@@ -251,7 +250,6 @@ export function ErpDataGrid<TData extends Record<string, string | number | null 
                     <div className="erp-grid-resizer" onDoubleClick={() => header.column.resetSize()} onMouseDown={header.getResizeHandler()} onTouchStart={header.getResizeHandler()} />
                   </th>
                 ))}
-                <th className="erp-grid-row-action">상세</th>
               </tr>
             ))}
             {showFilterRow ? (
@@ -277,22 +275,18 @@ export function ErpDataGrid<TData extends Record<string, string | number | null 
                     </th>
                   );
                 })}
-                <th />
               </tr>
             ) : null}
           </thead>
           <tbody>
             {visibleRows.map((row) => (
-              <tr className={row.getIsSelected() ? 'erp-grid-selected-row' : undefined} key={row.id}>
-                <td className="erp-grid-row-select">
+              <tr className={row.getIsSelected() ? 'erp-grid-selected-row' : undefined} key={row.id} onDoubleClick={() => setSelectedRow(row.original)}>
+                <td className="erp-grid-row-select" onDoubleClick={(event) => event.stopPropagation()}>
                   <input aria-label="행 선택" checked={row.getIsSelected()} onChange={row.getToggleSelectedHandler()} type="checkbox" />
                 </td>
                 {row.getVisibleCells().map((cell) => (
                   <td key={cell.id}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</td>
                 ))}
-                <td className="erp-grid-row-action">
-                  <button onClick={() => setSelectedRow(row.original)} type="button">보기</button>
-                </td>
               </tr>
             ))}
           </tbody>
@@ -314,7 +308,6 @@ export function ErpDataGrid<TData extends Record<string, string | number | null 
                   </td>
                 );
               })}
-              <td />
             </tr>
           </tfoot>
         </table>

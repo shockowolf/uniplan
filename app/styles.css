@@ -498,8 +498,7 @@ th { color: var(--muted); font-size: 13px; }
   color: var(--text);
   padding: 9px 10px;
 }
-.erp-grid-actions button,
-.erp-grid-row-action button {
+.erp-grid-actions button {
   border-radius: 12px;
   padding: 8px 10px;
 }
@@ -600,18 +599,15 @@ th {
 .erp-grid-selected-row td {
   background: rgba(95, 211, 255, .08);
 }
-.erp-grid-select-col,
-.erp-grid-action-col {
+.erp-grid-select-col {
   width: 52px;
 }
 .erp-grid-row-select {
   width: 40px;
   text-align: center;
 }
-.erp-grid-row-action {
-  width: 52px;
-  text-align: center;
-}
+.erp-grid tbody tr { cursor: default; }
+.erp-grid tbody tr:hover td { background: rgba(95, 211, 255, .05); }
 tfoot td {
   color: var(--accent);
   font-weight: 700;
