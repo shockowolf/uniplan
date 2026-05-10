@@ -1,4 +1,5 @@
 import { ModulePage } from '@/components/ModulePage';
+import { GootzChartDashboard } from '@/components/system/GootzChartDashboard';
 import { UserManagementDetail } from '@/components/system/UserManagementDetail';
 
 type SystemPageProps = {
@@ -10,6 +11,10 @@ export default async function SystemPage({ searchParams }: SystemPageProps) {
 
   if (params.legacy === 'LM002') {
     return <UserManagementDetail />;
+  }
+
+  if (params.legacy === 'LM009') {
+    return <GootzChartDashboard />;
   }
 
   return (

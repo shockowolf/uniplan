@@ -1,10 +1,25 @@
 export type Metric = { label: string; value: string | number };
 export type Grid = { columns: string[]; rows: Record<string, string | number>[] };
+export type ChartKind = 'bar' | 'line' | 'stacked-bar' | 'stacked-area' | 'composed' | 'treemap';
+export type ChartSeries = {
+  key: string;
+  name: string;
+  type?: 'bar' | 'line' | 'area';
+  axis?: 'left' | 'right';
+  color?: string;
+  stackId?: string;
+  unit?: string;
+};
 export type Chart = {
-  type: 'bar' | 'line';
+  type?: 'bar' | 'line';
+  kind?: ChartKind;
   title: string;
+  description?: string;
   xKey: string;
   yKey: string;
+  series?: ChartSeries[];
+  valueFormat?: 'money' | 'count' | 'percent';
+  height?: number;
   data: Record<string, string | number>[];
 };
 

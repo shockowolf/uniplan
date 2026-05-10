@@ -1,6 +1,7 @@
 'use client';
 
 import { FormEvent, useState } from 'react';
+import type { Chart } from '@/lib/templates/types';
 import { ChartView } from './ChartView';
 import { DataGrid } from './DataGrid';
 import { MetricCards } from './MetricCards';
@@ -9,13 +10,7 @@ type ChatResult = {
   templateId: string;
   message: string;
   metrics?: { label: string; value: string | number }[];
-  chart?: {
-    type: 'bar' | 'line';
-    title: string;
-    xKey: string;
-    yKey: string;
-    data: Record<string, string | number>[];
-  };
+  chart?: Chart;
   grid?: { columns: string[]; rows: Record<string, string | number>[] };
   suggestions: string[];
 };
