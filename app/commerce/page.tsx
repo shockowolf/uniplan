@@ -2,14 +2,14 @@ import { ModulePage } from '@/components/ModulePage';
 import { UniErpAdminPage } from '@/components/UniErpAdminPage';
 import { findUniErpMenuItem, getUniErpModule } from '@/lib/uniErpBlueprint';
 
-type SalesPageProps = {
+type CommercePageProps = {
   searchParams?: Promise<{ legacy?: string }>;
 };
 
-export default async function SalesPage({ searchParams }: SalesPageProps) {
+export default async function CommercePage({ searchParams }: CommercePageProps) {
   const params = searchParams ? await searchParams : {};
-  const adminPage = findUniErpMenuItem('/sales', params.legacy);
-  const module = getUniErpModule('/sales');
+  const adminPage = findUniErpMenuItem('/commerce', params.legacy);
+  const module = getUniErpModule('/commerce');
 
   if (adminPage) return <UniErpAdminPage page={adminPage} />;
 

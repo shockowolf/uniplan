@@ -1,4 +1,5 @@
 import { demoCompanyId, prisma } from '@/lib/db';
+import { uniErpModules } from '@/lib/uniErpBlueprint';
 
 export type SidebarMenuItem = {
   label: string;
@@ -7,12 +8,14 @@ export type SidebarMenuItem = {
 };
 
 export const fallbackSidebarMenuItems: SidebarMenuItem[] = [
-  { label: 'Dashboard', href: '/' },
-  { label: 'Sales', href: '/sales' },
-  { label: 'Customers', href: '/customers' },
-  { label: 'Inventory', href: '/inventory' },
-  { label: 'Finance', href: '/finance' },
-  { label: 'Operations', href: '/operations' }
+  ...uniErpModules.map((module) => ({
+    label: module.label,
+    href: module.href,
+    children: module.children.map((item) => ({
+      label: item.label,
+      href: item.href
+    }))
+  }))
 ];
 
 export async function getSidebarMenuItems(companyId = demoCompanyId, roleCode = 'admin'): Promise<SidebarMenuItem[]> {

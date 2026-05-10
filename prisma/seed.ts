@@ -1,4 +1,5 @@
 import { PrismaClient } from '@prisma/client';
+import { uniErpModules } from '../lib/uniErpBlueprint';
 
 const prisma = new PrismaClient();
 const companyId = 'demo-company';
@@ -88,15 +89,14 @@ async function main() {
     }
   });
 
-  const navigationSeeds = [
-    { code: 'dashboard', label: 'Dashboard', href: '/', sortOrder: 10, legacyMenuId: 'dashboard', legacyMapId: 'dashboard' },
-    { code: 'sales', label: 'Sales', href: '/sales', sortOrder: 20, legacyMenuId: 'sales', legacyMapId: 'sales' },
-    { code: 'customers', label: 'Customers', href: '/customers', sortOrder: 30, legacyMenuId: 'customers', legacyMapId: 'customers' },
-    { code: 'inventory', label: 'Inventory', href: '/inventory', sortOrder: 40, legacyMenuId: 'inventory', legacyMapId: 'inventory' },
-    { code: 'finance', label: 'Finance', href: '/finance', sortOrder: 50, legacyMenuId: 'finance', legacyMapId: 'finance' },
-    { code: 'operations', label: 'Operations', href: '/operations', sortOrder: 60, legacyMenuId: 'operations', legacyMapId: 'operations' },
-    { code: 'system', label: 'System', href: '/system', sortOrder: 70, legacyMenuId: 'LSYS', legacyMapId: 'LSYS' }
-  ];
+  const navigationSeeds = uniErpModules.map((module) => ({
+    code: module.code,
+    label: module.label,
+    href: module.href,
+    sortOrder: module.sortOrder,
+    legacyMenuId: module.legacyMenuId,
+    legacyMapId: module.legacyMapId
+  }));
 
   for (const seed of navigationSeeds) {
     const menu = await prisma.menu.upsert({
@@ -180,168 +180,12 @@ async function main() {
     });
   }
 
-  const financeChildren = [
-    {
-      code: 'finance-tax-invoice',
-      label: '전자세금계산서',
-      href: '/finance?legacy=LM101',
-      sortOrder: 10,
-      legacyMenuId: 'LM101',
-      legacyMapId: 'LM101'
-    },
-    {
-      code: 'finance-tax-receipt',
-      label: '세무접수관리',
-      href: '/finance?legacy=LM102',
-      sortOrder: 20,
-      legacyMenuId: 'LM102',
-      legacyMapId: 'LM102'
-    }
-  ];
-
-  const employeeChildren = [
-    {
-      code: 'operations-employees',
-      label: '사원관리',
-      href: '/operations?legacy=LM013',
-      sortOrder: 10,
-      legacyMenuId: 'LM013',
-      legacyMapId: 'LM013'
-    }
-  ];
-
-  const customerChildren = [
-    {
-      code: 'customers-master',
-      label: '거래처관리',
-      href: '/customers?legacy=LM014',
-      sortOrder: 10,
-      legacyMenuId: 'LM014',
-      legacyMapId: 'LM014'
-    },
-    {
-      code: 'customers-partners',
-      label: '파트너관리',
-      href: '/customers?legacy=LM015',
-      sortOrder: 20,
-      legacyMenuId: 'LM015',
-      legacyMapId: 'LM015'
-    }
-  ];
-
-  const systemChildren = [
-    {
-      code: 'system-admin-home',
-      label: '관리자 홈',
-      href: '/system?legacy=LM001',
-      sortOrder: 10,
-      legacyMenuId: 'LM001',
-      legacyMapId: 'LM001'
-    },
-    {
-      code: 'system-users',
-      label: '사용자관리',
-      href: '/system?legacy=LM002',
-      sortOrder: 20,
-      legacyMenuId: 'LM002',
-      legacyMapId: 'LM002'
-    },
-    {
-      code: 'system-roles',
-      label: '권한관리',
-      href: '/system?legacy=LM003',
-      sortOrder: 30,
-      legacyMenuId: 'LM003',
-      legacyMapId: 'LM003'
-    },
-    {
-      code: 'system-menus',
-      label: '메뉴관리',
-      href: '/system?legacy=LM004',
-      sortOrder: 40,
-      legacyMenuId: 'LM004',
-      legacyMapId: 'LM004'
-    },
-    {
-      code: 'system-url-auth',
-      label: 'URL 권한',
-      href: '/system?legacy=LM005',
-      sortOrder: 50,
-      legacyMenuId: 'LM005',
-      legacyMapId: 'LM005'
-    },
-    {
-      code: 'system-domains',
-      label: '도메인관리',
-      href: '/system?legacy=LM006',
-      sortOrder: 60,
-      legacyMenuId: 'LM006',
-      legacyMapId: 'LM006'
-    },
-    {
-      code: 'system-companies',
-      label: '회사관리',
-      href: '/system?legacy=LM007',
-      sortOrder: 70,
-      legacyMenuId: 'LM007',
-      legacyMapId: 'LM007'
-    },
-    {
-      code: 'system-codes',
-      label: '공통코드',
-      href: '/system?legacy=LM008',
-      sortOrder: 80,
-      legacyMenuId: 'LM008',
-      legacyMapId: 'LM008'
-    },
-    {
-      code: 'system-home-cards',
-      label: '홈 카드',
-      href: '/system?legacy=LM009',
-      sortOrder: 90,
-      legacyMenuId: 'LM009',
-      legacyMapId: 'LM009'
-    },
-    {
-      code: 'system-my-page',
-      label: '마이페이지',
-      href: '/system?legacy=LM020',
-      sortOrder: 100,
-      legacyMenuId: 'LM020',
-      legacyMapId: 'LM020'
-    },
-    {
-      code: 'system-login-page',
-      label: '로그인 페이지',
-      href: '/system?legacy=LOGIN',
-      sortOrder: 110,
-      legacyMenuId: 'LOGIN',
-      legacyMapId: 'LOGIN'
-    }
-  ];
-
-  const childMenuGroups = [
-    {
-      parentId: 'menu-node-finance',
-      source: 'UniPlan finance menu seed: LFIN -> LM101/LM102',
-      items: financeChildren
-    },
-    {
-      parentId: 'menu-node-operations',
-      source: 'UniPlan operations menu seed: LHR -> LM013',
-      items: employeeChildren
-    },
-    {
-      parentId: 'menu-node-customers',
-      source: 'UniPlan customer menu seed: LBIZ -> LM014/LM015',
-      items: customerChildren
-    },
-    {
-      parentId: 'menu-node-system',
-      source: 'UniPlan system menu seed: LSYS/LROOT login related menus',
-      items: systemChildren
-    }
-  ];
+  const childMenuGroups = uniErpModules
+    .filter((module) => module.children.length > 0)
+    .map((module) => ({
+      parentId: `menu-node-${module.code}`,
+      items: module.children
+    }));
 
   // Seeded into UniPlan menu branches while preserving the original legacy branch ids.
   for (const group of childMenuGroups) {
