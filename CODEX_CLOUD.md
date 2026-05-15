@@ -6,6 +6,7 @@ Use this GitHub repository as the Codex Cloud project for `uniplan`.
 
 ```bash
 npm install
+npm run setup:cloud
 ```
 
 ## Verification
@@ -13,14 +14,20 @@ npm install
 Primary check:
 
 ```bash
-npm run typecheck
+npm run verify:cloud
 ```
 
-Full local check when SQLite and Prisma generation are available:
+`setup:cloud` creates the ignored local `.env`, points Prisma at SQLite, creates or
+updates the demo database, and seeds the data used by `/api/chat`. It avoids
+`prisma db push --force-reset` because Codex Cloud/Prisma safety checks block
+destructive database reset commands.
+
+Manual equivalent:
 
 ```bash
-npm run db:reset
-npm run build
+npm run db:use:sqlite
+npm run db:push
+npm run db:seed
 ```
 
 ## Runtime

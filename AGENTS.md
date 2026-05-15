@@ -22,6 +22,6 @@
 
 ## Codex Cloud
 
-- Setup: `npm install`
-- Verify: `npm run typecheck`
-- Full local verification when dependencies/SQLite are available: `npm run db:reset && npm run build`
+- Setup: `npm install && npm run setup:cloud`
+- Verify: `npm run verify:cloud`
+- Full local verification when dependencies/SQLite are available and a destructive demo DB reset is acceptable: `npm run db:reset && npm run build`

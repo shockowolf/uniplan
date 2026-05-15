@@ -8,8 +8,10 @@
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
+    "setup:cloud": "npm run db:use:sqlite && npm run db:push && npm run db:seed",
+    "verify:cloud": "npm run typecheck && npm run build",
     "db:push": "prisma db push",
-    "db:seed": "tsx prisma/seed.ts",
+    "db:seed": "node --import tsx prisma/seed.ts",
     "db:reset": "prisma db push --force-reset && npm run db:seed",
     "db:use:sqlite": "cp prisma/schema.sqlite.prisma prisma/schema.prisma && printf 'DATABASE_URL=\"file:./dev.db\"\\n' > .env",
     "db:use:postgres": "cp prisma/schema.postgres.prisma prisma/schema.prisma && cp .env.postgres.example .env"
