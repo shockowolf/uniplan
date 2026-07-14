@@ -72,12 +72,19 @@ export async function createAuthSession(
     options.ttlSeconds ?? getSessionTtlSeconds(),
   );
   const expiresAt = new Date(now.getTime() + ttlSeconds * 1_000);
+  const sessionUser = await databaseClient.user.findUnique({
+    where: { id: userId },
+    select: { companyId: true },
+  });
+  if (!sessionUser)
+    throw new Error('Cannot create a session for an unknown user.');
 
   for (let attempt = 0; attempt < SESSION_CREATION_ATTEMPTS; attempt += 1) {
     const token = generateSessionToken();
     try {
       const storedSession = await databaseClient.authSession.create({
         data: {
+          companyId: sessionUser.companyId,
           userId,
           tokenHash: hashSessionToken(token),
           expiresAt,

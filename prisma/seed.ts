@@ -164,7 +164,7 @@ async function seedDemoIdentityAndPermissions() {
   await prisma.userRole.upsert({
     where: { userId_roleId: { userId: adminUser.id, roleId: adminRole.id } },
     update: {},
-    create: { userId: adminUser.id, roleId: adminRole.id },
+    create: { companyId, userId: adminUser.id, roleId: adminRole.id },
   });
 
   const menuItemIdByCode = new Map<string, string>();
@@ -210,6 +210,7 @@ async function seedDemoIdentityAndPermissions() {
         canAdmin: true,
       },
       create: {
+        companyId,
         roleId: adminRole.id,
         menuItemId: menuItem.id,
         canRead: true,
@@ -233,6 +234,7 @@ async function seedDemoIdentityAndPermissions() {
         canAdmin: false,
       },
       create: {
+        companyId,
         roleId: staffRole.id,
         menuItemId: menuItem.id,
         canRead: staffHasReadPermission,
@@ -372,7 +374,7 @@ async function seedDemoItemsAndBoms(adminUserId: string) {
   const tabletCoreDraftRevision = await prisma.bomVersion.upsert({
     where: { bomId_revision: { bomId: tabletCoreBom.id, revision: 1 } },
     update: {},
-    create: { bomId: tabletCoreBom.id, revision: 1 },
+    create: { companyId, bomId: tabletCoreBom.id, revision: 1 },
   });
   if (tabletCoreDraftRevision.status === BomVersionStatus.DRAFT) {
     await replaceDraftBomComponents(companyId, tabletCoreDraftRevision.id, [
@@ -403,7 +405,7 @@ async function seedDemoItemsAndBoms(adminUserId: string) {
   const tabletKitDraftRevision = await prisma.bomVersion.upsert({
     where: { bomId_revision: { bomId: tabletKitBom.id, revision: 1 } },
     update: {},
-    create: { bomId: tabletKitBom.id, revision: 1 },
+    create: { companyId, bomId: tabletKitBom.id, revision: 1 },
   });
   if (tabletKitDraftRevision.status === BomVersionStatus.DRAFT) {
     await replaceDraftBomComponents(companyId, tabletKitDraftRevision.id, [
@@ -625,6 +627,7 @@ async function seedDemoSalesAndCrm(
     await prisma.invoiceItem.deleteMany({ where: { invoiceId: invoice.id } });
     await prisma.invoiceItem.create({
       data: {
+        companyId,
         invoiceId: invoice.id,
         itemId: invoiceItem.id,
         itemName: invoiceItem.name,

@@ -6,6 +6,10 @@ import {
 } from '@prisma/client';
 import { prisma } from '@/lib/db';
 import {
+  type CompanyMutationOptions,
+  withCompanyMutationTransaction,
+} from '@/lib/domain/concurrency';
+import {
   ConflictError,
   NotFoundError,
   ValidationError,
@@ -77,36 +81,48 @@ export async function createBom(
     notes?: string | null;
   },
   databaseClient: PrismaClient = prisma,
+  transactionOptions: CompanyMutationOptions = {},
 ) {
-  const outputItem = await databaseClient.item.findFirst({
-    where: { id: input.outputItemId, companyId, active: true },
-    select: { id: true, itemType: true, trackInventory: true },
-  });
-  if (!outputItem)
-    throw new ValidationError(
-      'Output item must belong to the same company',
-      'INVALID_BOM_OUTPUT',
-    );
-  if (outputItem.itemType === ItemType.SERVICE || !outputItem.trackInventory) {
-    throw new ValidationError(
-      'BOM output must be an inventory-tracked item',
-      'INVALID_BOM_OUTPUT',
-    );
-  }
+  return withCompanyMutationTransaction(
+    companyId,
+    databaseClient,
+    async (databaseTransaction) => {
+      const outputItem = await databaseTransaction.item.findFirst({
+        where: { id: input.outputItemId, companyId, active: true },
+        select: { id: true, itemType: true, trackInventory: true },
+      });
+      if (!outputItem)
+        throw new ValidationError(
+          'Output item must belong to the same company',
+          'INVALID_BOM_OUTPUT',
+        );
+      if (
+        outputItem.itemType === ItemType.SERVICE ||
+        !outputItem.trackInventory
+      ) {
+        throw new ValidationError(
+          'BOM output must be an inventory-tracked item',
+          'INVALID_BOM_OUTPUT',
+        );
+      }
 
-  return databaseClient.$transaction(async (databaseTransaction) =>
-    databaseTransaction.bom.create({
-      data: {
-        companyId,
-        code: requiredText(input.code, 'code'),
-        name: requiredText(input.name, 'name'),
-        outputItemId: input.outputItemId,
-        versions: {
-          create: { revision: 1, notes: input.notes?.trim() || null },
+      return databaseTransaction.bom.create({
+        data: {
+          companyId,
+          code: requiredText(input.code, 'code'),
+          name: requiredText(input.name, 'name'),
+          outputItemId: input.outputItemId,
+          versions: {
+            create: {
+              revision: 1,
+              notes: input.notes?.trim() || null,
+            },
+          },
         },
-      },
-      include: { versions: true },
-    }),
+        include: { versions: true },
+      });
+    },
+    transactionOptions,
   );
 }
 
@@ -114,55 +130,71 @@ export async function updateBom(
   companyId: string,
   bomId: string,
   input: { code?: string; name?: string },
-  databaseClient: DatabaseClient = prisma,
+  databaseClient: PrismaClient = prisma,
+  transactionOptions: CompanyMutationOptions = {},
 ) {
-  const existingBom = await databaseClient.bom.findFirst({
-    where: { id: bomId, companyId },
-    select: { id: true },
-  });
-  if (!existingBom) throw new NotFoundError('BOM not found');
-  const normalizedCode = input.code?.trim();
-  const normalizedName = input.name?.trim();
-  if (input.code !== undefined && !normalizedCode)
-    throw new ValidationError('code is required');
-  if (input.name !== undefined && !normalizedName)
-    throw new ValidationError('name is required');
-  return databaseClient.bom.update({
-    where: { id: bomId, companyId },
-    data: {
-      ...(normalizedCode ? { code: normalizedCode } : {}),
-      ...(normalizedName ? { name: normalizedName } : {}),
+  return withCompanyMutationTransaction(
+    companyId,
+    databaseClient,
+    async (databaseTransaction) => {
+      const existingBom = await databaseTransaction.bom.findFirst({
+        where: { id: bomId, companyId },
+        select: { id: true },
+      });
+      if (!existingBom) throw new NotFoundError('BOM not found');
+      const normalizedCode = input.code?.trim();
+      const normalizedName = input.name?.trim();
+      if (input.code !== undefined && !normalizedCode)
+        throw new ValidationError('code is required');
+      if (input.name !== undefined && !normalizedName)
+        throw new ValidationError('name is required');
+      return databaseTransaction.bom.update({
+        where: { id: bomId, companyId },
+        data: {
+          ...(normalizedCode ? { code: normalizedCode } : {}),
+          ...(normalizedName ? { name: normalizedName } : {}),
+        },
+      });
     },
-  });
+    transactionOptions,
+  );
 }
 
 export async function deactivateBom(
   companyId: string,
   bomId: string,
-  databaseClient: DatabaseClient = prisma,
+  databaseClient: PrismaClient = prisma,
+  transactionOptions: CompanyMutationOptions = {},
 ) {
-  const existingBom = await databaseClient.bom.findFirst({
-    where: { id: bomId, companyId },
-    select: {
-      id: true,
-      versions: {
-        where: { status: BomVersionStatus.ACTIVE },
-        select: { id: true },
-        take: 1,
-      },
+  return withCompanyMutationTransaction(
+    companyId,
+    databaseClient,
+    async (databaseTransaction) => {
+      const existingBom = await databaseTransaction.bom.findFirst({
+        where: { id: bomId, companyId },
+        select: {
+          id: true,
+          versions: {
+            where: { status: BomVersionStatus.ACTIVE },
+            select: { id: true },
+            take: 1,
+          },
+        },
+      });
+      if (!existingBom) throw new NotFoundError('BOM not found');
+      if (existingBom.versions.length > 0) {
+        throw new ConflictError(
+          'Active BOM revisions must be retired before deactivation',
+          'BOM_HAS_ACTIVE_REVISION',
+        );
+      }
+      return databaseTransaction.bom.update({
+        where: { id: bomId, companyId },
+        data: { active: false },
+      });
     },
-  });
-  if (!existingBom) throw new NotFoundError('BOM not found');
-  if (existingBom.versions.length > 0) {
-    throw new ConflictError(
-      'Active BOM revisions must be retired before deactivation',
-      'BOM_HAS_ACTIVE_REVISION',
-    );
-  }
-  return databaseClient.bom.update({
-    where: { id: bomId, companyId },
-    data: { active: false },
-  });
+    transactionOptions,
+  );
 }
 
 export async function createDraftBomRevision(
@@ -170,48 +202,55 @@ export async function createDraftBomRevision(
   bomId: string,
   notes?: string | null,
   databaseClient: PrismaClient = prisma,
+  transactionOptions: CompanyMutationOptions = {},
 ) {
-  return databaseClient.$transaction(async (databaseTransaction) => {
-    const bomRecord = await databaseTransaction.bom.findFirst({
-      where: { id: bomId, companyId, active: true },
-      include: {
-        versions: {
-          where: { status: BomVersionStatus.ACTIVE },
-          include: {
-            components: {
-              orderBy: [{ sortOrder: 'asc' }, { componentItemId: 'asc' }],
+  return withCompanyMutationTransaction(
+    companyId,
+    databaseClient,
+    async (databaseTransaction) => {
+      const bomRecord = await databaseTransaction.bom.findFirst({
+        where: { id: bomId, companyId, active: true },
+        include: {
+          versions: {
+            where: { status: BomVersionStatus.ACTIVE },
+            include: {
+              components: {
+                orderBy: [{ sortOrder: 'asc' }, { componentItemId: 'asc' }],
+              },
             },
+            take: 1,
           },
-          take: 1,
+          _count: { select: { versions: true } },
         },
-        _count: { select: { versions: true } },
-      },
-    });
-    if (!bomRecord) throw new NotFoundError('BOM not found');
-    const latestRevisionAggregate =
-      await databaseTransaction.bomVersion.aggregate({
-        where: { bomId },
-        _max: { revision: true },
       });
-    const sourceActiveBomVersion = bomRecord.versions[0];
-    return databaseTransaction.bomVersion.create({
-      data: {
-        bomId,
-        revision: (latestRevisionAggregate._max.revision ?? 0) + 1,
-        notes: notes?.trim() || null,
-        components: sourceActiveBomVersion
-          ? {
-              create: sourceActiveBomVersion.components.map((component) => ({
-                componentItemId: component.componentItemId,
-                quantity: component.quantity,
-                sortOrder: component.sortOrder,
-              })),
-            }
-          : undefined,
-      },
-      include: { components: true },
-    });
-  });
+      if (!bomRecord) throw new NotFoundError('BOM not found');
+      const latestRevisionAggregate =
+        await databaseTransaction.bomVersion.aggregate({
+          where: { bomId },
+          _max: { revision: true },
+        });
+      const sourceActiveBomVersion = bomRecord.versions[0];
+      return databaseTransaction.bomVersion.create({
+        data: {
+          companyId,
+          bomId,
+          revision: (latestRevisionAggregate._max.revision ?? 0) + 1,
+          notes: notes?.trim() || null,
+          components: sourceActiveBomVersion
+            ? {
+                create: sourceActiveBomVersion.components.map((component) => ({
+                  componentItemId: component.componentItemId,
+                  quantity: component.quantity,
+                  sortOrder: component.sortOrder,
+                })),
+              }
+            : undefined,
+        },
+        include: { components: true },
+      });
+    },
+    transactionOptions,
+  );
 }
 
 export async function replaceDraftBomComponents(
@@ -219,83 +258,90 @@ export async function replaceDraftBomComponents(
   bomVersionId: string,
   componentInputs: ComponentInput[],
   databaseClient: PrismaClient = prisma,
+  transactionOptions: CompanyMutationOptions = {},
 ) {
-  return databaseClient.$transaction(async (databaseTransaction) => {
-    await requireMutableDraftBomRevision(
-      companyId,
-      bomVersionId,
-      databaseTransaction,
-    );
-    const uniqueComponentItemIds = new Set(
-      componentInputs.map((componentInput) => componentInput.itemId),
-    );
-    if (uniqueComponentItemIds.size !== componentInputs.length) {
-      throw new ValidationError(
-        'A component item can appear only once per revision',
-        'DUPLICATE_BOM_COMPONENT',
-      );
-    }
-    if (componentInputs.length === 0)
-      throw new ValidationError(
-        'A BOM revision requires at least one component',
-        'EMPTY_BOM',
-      );
-
-    const componentItems = await databaseTransaction.item.findMany({
-      where: {
+  return withCompanyMutationTransaction(
+    companyId,
+    databaseClient,
+    async (databaseTransaction) => {
+      await requireMutableDraftBomRevision(
         companyId,
-        id: {
-          in: componentInputs.map((componentInput) => componentInput.itemId),
-        },
-        active: true,
-      },
-      select: { id: true, itemType: true, trackInventory: true },
-    });
-    if (componentItems.length !== componentInputs.length) {
-      throw new ValidationError(
-        'All components must belong to the same company',
-        'INVALID_BOM_COMPONENT',
+        bomVersionId,
+        databaseTransaction,
       );
-    }
-    if (
-      componentItems.some(
-        (componentItem) =>
-          componentItem.itemType === ItemType.SERVICE ||
-          !componentItem.trackInventory,
-      )
-    ) {
-      throw new ValidationError(
-        'BOM components must be inventory-tracked items',
-        'INVALID_BOM_COMPONENT',
+      const uniqueComponentItemIds = new Set(
+        componentInputs.map((componentInput) => componentInput.itemId),
       );
-    }
-
-    const componentRecords = componentInputs.map(
-      (componentInput, componentIndex) => {
-        const componentQuantity = positiveQuantity(
-          componentInput.quantity,
-          'components',
-          'INVALID_BOM_QUANTITY',
+      if (uniqueComponentItemIds.size !== componentInputs.length) {
+        throw new ValidationError(
+          'A component item can appear only once per revision',
+          'DUPLICATE_BOM_COMPONENT',
         );
-        return {
-          bomVersionId,
-          componentItemId: componentInput.itemId,
-          quantity: componentQuantity,
-          sortOrder: componentInput.sortOrder ?? componentIndex,
-        };
-      },
-    );
-    await databaseTransaction.bomComponent.deleteMany({
-      where: { bomVersionId },
-    });
-    await databaseTransaction.bomComponent.createMany({
-      data: componentRecords,
-    });
-    return databaseTransaction.bomVersion.findUniqueOrThrow({
-      where: { id: bomVersionId },
-      include: { components: { include: { componentItem: true } } },
-    });
-  });
+      }
+      if (componentInputs.length === 0)
+        throw new ValidationError(
+          'A BOM revision requires at least one component',
+          'EMPTY_BOM',
+        );
+
+      const componentItems = await databaseTransaction.item.findMany({
+        where: {
+          companyId,
+          id: {
+            in: componentInputs.map((componentInput) => componentInput.itemId),
+          },
+          active: true,
+        },
+        select: { id: true, itemType: true, trackInventory: true },
+      });
+      if (componentItems.length !== componentInputs.length) {
+        throw new ValidationError(
+          'All components must belong to the same company',
+          'INVALID_BOM_COMPONENT',
+        );
+      }
+      if (
+        componentItems.some(
+          (componentItem) =>
+            componentItem.itemType === ItemType.SERVICE ||
+            !componentItem.trackInventory,
+        )
+      ) {
+        throw new ValidationError(
+          'BOM components must be inventory-tracked items',
+          'INVALID_BOM_COMPONENT',
+        );
+      }
+
+      const componentRecords = componentInputs.map(
+        (componentInput, componentIndex) => {
+          const componentQuantity = positiveQuantity(
+            componentInput.quantity,
+            'components',
+            'INVALID_BOM_QUANTITY',
+          );
+          return {
+            companyId,
+            bomVersionId,
+            componentItemId: componentInput.itemId,
+            quantity: componentQuantity,
+            sortOrder: componentInput.sortOrder ?? componentIndex,
+          };
+        },
+      );
+      await databaseTransaction.bomComponent.deleteMany({
+        where: { bomVersionId },
+      });
+      await databaseTransaction.bomComponent.createMany({
+        data: componentRecords,
+      });
+      return databaseTransaction.bomVersion.findUniqueOrThrow({
+        where: { id: bomVersionId },
+        include: { components: { include: { componentItem: true } } },
+      });
+    },
+    transactionOptions,
+  );
 }
 
 type LoadedBomVersion = Prisma.BomVersionGetPayload<{
@@ -314,6 +360,17 @@ async function assertNoBomCycle(
     currentBomVersion: LoadedBomVersion,
     ancestorOutputItemIds: readonly string[],
   ) => {
+    if (
+      !currentBomVersion.bom.active ||
+      !currentBomVersion.bom.outputItem.active ||
+      !currentBomVersion.bom.outputItem.trackInventory ||
+      currentBomVersion.bom.outputItem.itemType === ItemType.SERVICE
+    ) {
+      throw new ValidationError(
+        'BOM output must be active and inventory tracked',
+        'INVALID_BOM_OUTPUT',
+      );
+    }
     const outputItemId = currentBomVersion.bom.outputItemId;
     const currentOutputItemPath = [...ancestorOutputItemIds, outputItemId];
     const sortedComponents = [...currentBomVersion.components].sort(
@@ -323,6 +380,16 @@ async function assertNoBomCycle(
         left.componentItemId.localeCompare(right.componentItemId),
     );
     for (const component of sortedComponents) {
+      if (
+        !component.componentItem.active ||
+        !component.componentItem.trackInventory ||
+        component.componentItem.itemType === ItemType.SERVICE
+      ) {
+        throw new ValidationError(
+          'BOM components must be active and inventory tracked',
+          'INVALID_BOM_COMPONENT',
+        );
+      }
       if (currentOutputItemPath.includes(component.componentItemId)) {
         throw new ConflictError('BOM cycle detected', 'BOM_CYCLE');
       }
@@ -349,105 +416,165 @@ export async function activateBomRevision(
   companyId: string,
   bomVersionId: string,
   databaseClient: PrismaClient = prisma,
+  transactionOptions: CompanyMutationOptions = {},
 ) {
-  return databaseClient.$transaction(async (databaseTransaction) => {
-    await requireMutableDraftBomRevision(
-      companyId,
-      bomVersionId,
-      databaseTransaction,
-    );
-    const allBomVersions = await databaseTransaction.bomVersion.findMany({
-      where: { bom: { companyId } },
-      include: {
-        bom: { include: { outputItem: true } },
-        components: { include: { componentItem: true } },
-      },
-    });
-    const selectedBomVersion = allBomVersions.find(
-      (bomVersion) => bomVersion.id === bomVersionId,
-    );
-    if (!selectedBomVersion) throw new NotFoundError('BOM revision not found');
-    if (selectedBomVersion.components.length === 0) {
-      throw new ValidationError(
-        'A BOM revision requires at least one component',
-        'EMPTY_BOM',
+  return withCompanyMutationTransaction(
+    companyId,
+    databaseClient,
+    async (databaseTransaction) => {
+      await requireMutableDraftBomRevision(
+        companyId,
+        bomVersionId,
+        databaseTransaction,
       );
-    }
-
-    const activeBomVersionIdByOutputItemId = new Map(
-      allBomVersions
-        .filter((bomVersion) => bomVersion.status === BomVersionStatus.ACTIVE)
-        .map((activeBomVersion) => [
-          activeBomVersion.bom.outputItemId,
-          activeBomVersion.id,
-        ]),
-    );
-    const pinnedChildVersionIdsByComponentId = new Map(
-      selectedBomVersion.components.map((component) => [
-        component.id,
-        activeBomVersionIdByOutputItemId.get(component.componentItemId) ?? null,
-      ]),
-    );
-    const bomVersionsById = new Map(
-      allBomVersions.map((bomVersion) => [bomVersion.id, bomVersion]),
-    );
-    await assertNoBomCycle(
-      selectedBomVersion,
-      bomVersionsById,
-      pinnedChildVersionIdsByComponentId,
-    );
-
-    // Pinning child revisions keeps future production explosions reproducible after another BOM revision is activated.
-    for (const component of [...selectedBomVersion.components].sort(
-      (left, right) => left.id.localeCompare(right.id),
-    )) {
-      await databaseTransaction.bomComponent.update({
-        where: { id: component.id },
-        data: {
-          childBomVersionId:
-            pinnedChildVersionIdsByComponentId.get(component.id) ?? null,
+      const allBomVersions = await databaseTransaction.bomVersion.findMany({
+        where: { bom: { companyId } },
+        include: {
+          bom: { include: { outputItem: true } },
+          components: { include: { componentItem: true } },
         },
       });
-    }
-    const activationTime = new Date();
-    await databaseTransaction.bomVersion.updateMany({
-      where: {
-        bomId: selectedBomVersion.bomId,
-        status: BomVersionStatus.ACTIVE,
-      },
-      data: { status: BomVersionStatus.RETIRED, retiredAt: activationTime },
-    });
-    return databaseTransaction.bomVersion.update({
-      where: { id: selectedBomVersion.id },
-      data: { status: BomVersionStatus.ACTIVE, activatedAt: activationTime },
-      include: {
-        bom: { include: { outputItem: true } },
-        components: { include: { componentItem: true } },
-      },
-    });
-  });
+      const selectedBomVersion = allBomVersions.find(
+        (bomVersion) => bomVersion.id === bomVersionId,
+      );
+      if (!selectedBomVersion)
+        throw new NotFoundError('BOM revision not found');
+      if (!selectedBomVersion.bom.active) {
+        throw new ConflictError(
+          'Inactive BOMs cannot be activated',
+          'BOM_INACTIVE',
+        );
+      }
+      if (
+        !selectedBomVersion.bom.outputItem.active ||
+        !selectedBomVersion.bom.outputItem.trackInventory ||
+        selectedBomVersion.bom.outputItem.itemType === ItemType.SERVICE
+      ) {
+        throw new ValidationError(
+          'BOM output must be active and inventory tracked',
+          'INVALID_BOM_OUTPUT',
+        );
+      }
+      if (selectedBomVersion.components.length === 0) {
+        throw new ValidationError(
+          'A BOM revision requires at least one component',
+          'EMPTY_BOM',
+        );
+      }
+      if (
+        selectedBomVersion.components.some(
+          (component) =>
+            !component.componentItem.active ||
+            !component.componentItem.trackInventory ||
+            component.componentItem.itemType === ItemType.SERVICE,
+        )
+      ) {
+        throw new ValidationError(
+          'BOM components must be active and inventory tracked',
+          'INVALID_BOM_COMPONENT',
+        );
+      }
+
+      const competingActiveBomVersion = allBomVersions.find(
+        (bomVersion) =>
+          bomVersion.bomId === selectedBomVersion.bomId &&
+          bomVersion.status === BomVersionStatus.ACTIVE,
+      );
+      if (
+        competingActiveBomVersion?.activatedAt &&
+        competingActiveBomVersion.activatedAt >= selectedBomVersion.createdAt
+      ) {
+        throw new ConflictError(
+          'A competing BOM revision was activated after this draft was created',
+          'STALE_BOM_ACTIVATION',
+        );
+      }
+
+      const activeBomVersionIdByOutputItemId = new Map(
+        allBomVersions
+          .filter((bomVersion) => bomVersion.status === BomVersionStatus.ACTIVE)
+          .map((activeBomVersion) => [
+            activeBomVersion.bom.outputItemId,
+            activeBomVersion.id,
+          ]),
+      );
+      const pinnedChildVersionIdsByComponentId = new Map(
+        selectedBomVersion.components.map((component) => [
+          component.id,
+          activeBomVersionIdByOutputItemId.get(component.componentItemId) ??
+            null,
+        ]),
+      );
+      const bomVersionsById = new Map(
+        allBomVersions.map((bomVersion) => [bomVersion.id, bomVersion]),
+      );
+      await assertNoBomCycle(
+        selectedBomVersion,
+        bomVersionsById,
+        pinnedChildVersionIdsByComponentId,
+      );
+
+      // Pinning child revisions keeps future production explosions reproducible after another BOM revision is activated.
+      for (const component of [...selectedBomVersion.components].sort(
+        (left, right) => left.id.localeCompare(right.id),
+      )) {
+        await databaseTransaction.bomComponent.update({
+          where: { id: component.id },
+          data: {
+            childBomVersionId:
+              pinnedChildVersionIdsByComponentId.get(component.id) ?? null,
+          },
+        });
+      }
+      const activationTime = new Date();
+      await databaseTransaction.bomVersion.updateMany({
+        where: {
+          bomId: selectedBomVersion.bomId,
+          status: BomVersionStatus.ACTIVE,
+        },
+        data: { status: BomVersionStatus.RETIRED, retiredAt: activationTime },
+      });
+      return databaseTransaction.bomVersion.update({
+        where: { id: selectedBomVersion.id },
+        data: { status: BomVersionStatus.ACTIVE, activatedAt: activationTime },
+        include: {
+          bom: { include: { outputItem: true } },
+          components: { include: { componentItem: true } },
+        },
+      });
+    },
+    transactionOptions,
+  );
 }
 
 export async function retireBomRevision(
   companyId: string,
   bomVersionId: string,
-  databaseClient: DatabaseClient = prisma,
+  databaseClient: PrismaClient = prisma,
+  transactionOptions: CompanyMutationOptions = {},
 ) {
-  const activeBomVersion = await databaseClient.bomVersion.findFirst({
-    where: { id: bomVersionId, bom: { companyId } },
-    select: { id: true, status: true },
-  });
-  if (!activeBomVersion) throw new NotFoundError('BOM revision not found');
-  if (activeBomVersion.status !== BomVersionStatus.ACTIVE) {
-    throw new ConflictError(
-      'Only an active BOM revision can be retired',
-      'BOM_NOT_ACTIVE',
-    );
-  }
-  return databaseClient.bomVersion.update({
-    where: { id: bomVersionId },
-    data: { status: BomVersionStatus.RETIRED, retiredAt: new Date() },
-  });
+  return withCompanyMutationTransaction(
+    companyId,
+    databaseClient,
+    async (databaseTransaction) => {
+      const activeBomVersion = await databaseTransaction.bomVersion.findFirst({
+        where: { id: bomVersionId, bom: { companyId } },
+        select: { id: true, status: true },
+      });
+      if (!activeBomVersion) throw new NotFoundError('BOM revision not found');
+      if (activeBomVersion.status !== BomVersionStatus.ACTIVE) {
+        throw new ConflictError(
+          'Only an active BOM revision can be retired',
+          'BOM_NOT_ACTIVE',
+        );
+      }
+      return databaseTransaction.bomVersion.update({
+        where: { id: bomVersionId },
+        data: { status: BomVersionStatus.RETIRED, retiredAt: new Date() },
+      });
+    },
+    transactionOptions,
+  );
 }
 
 export type ExplodedBomItem = {
@@ -490,6 +617,17 @@ export async function explodeBomRevision(
     quantityMultiplier: Prisma.Decimal,
     ancestorOutputItemIds: readonly string[],
   ) => {
+    if (
+      !currentBomVersion.bom.active ||
+      !currentBomVersion.bom.outputItem.active ||
+      !currentBomVersion.bom.outputItem.trackInventory ||
+      currentBomVersion.bom.outputItem.itemType === ItemType.SERVICE
+    ) {
+      throw new ValidationError(
+        'BOM output must be active and inventory tracked',
+        'INVALID_BOM_OUTPUT',
+      );
+    }
     if (ancestorOutputItemIds.includes(currentBomVersion.bom.outputItemId)) {
       throw new ConflictError('BOM cycle detected', 'BOM_CYCLE');
     }
@@ -504,6 +642,16 @@ export async function explodeBomRevision(
         left.componentItemId.localeCompare(right.componentItemId),
     );
     for (const component of sortedComponents) {
+      if (
+        !component.componentItem.active ||
+        !component.componentItem.trackInventory ||
+        component.componentItem.itemType === ItemType.SERVICE
+      ) {
+        throw new ValidationError(
+          'BOM components must be active and inventory tracked',
+          'INVALID_BOM_COMPONENT',
+        );
+      }
       if (currentOutputItemPath.includes(component.componentItemId)) {
         throw new ConflictError('BOM cycle detected', 'BOM_CYCLE');
       }

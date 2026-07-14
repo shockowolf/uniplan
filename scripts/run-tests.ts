@@ -3,7 +3,8 @@ import { readFileSync } from 'node:fs';
 
 const DEFAULT_DATABASE_URL =
   'postgresql://uniplan:uniplan_password@127.0.0.1:5433/uniplan_dev?schema=public';
-const TEST_SCHEMA = 'uniplan_test';
+export const TEST_SCHEMA = 'uniplan_test_u9';
+const TEST_GUARD = 'uniplan_test_u9_only';
 
 function databaseUrlFromDotEnv() {
   try {
@@ -12,9 +13,9 @@ function databaseUrlFromDotEnv() {
       .split(/\r?\n/)
       .find((line) => /^\s*DATABASE_URL\s*=/.test(line));
     if (!databaseUrlLine) return undefined;
-    const configuredValue = databaseUrlLine.slice(
-      databaseUrlLine.indexOf('=') + 1,
-    ).trim();
+    const configuredValue = databaseUrlLine
+      .slice(databaseUrlLine.indexOf('=') + 1)
+      .trim();
     if (configuredValue.startsWith('"') && configuredValue.endsWith('"')) {
       return JSON.parse(configuredValue) as string;
     }
@@ -28,9 +29,11 @@ function databaseUrlFromDotEnv() {
 }
 
 function resolveTestDatabaseUrl() {
-  if (process.env.TEST_DATABASE_URL) return process.env.TEST_DATABASE_URL;
   const baseUrl =
-    process.env.DATABASE_URL ?? databaseUrlFromDotEnv() ?? DEFAULT_DATABASE_URL;
+    process.env.TEST_DATABASE_URL ??
+    process.env.DATABASE_URL ??
+    databaseUrlFromDotEnv() ??
+    DEFAULT_DATABASE_URL;
   const testUrl = new URL(baseUrl);
   testUrl.searchParams.set('schema', TEST_SCHEMA);
   return testUrl.toString();
@@ -48,7 +51,8 @@ function run(command: string, args: string[], environment: NodeJS.ProcessEnv) {
 const environment = {
   ...process.env,
   DATABASE_URL: resolveTestDatabaseUrl(),
-  UNIPLAN_TEST_DATABASE_GUARD: 'enabled',
+  UNIPLAN_TEST_DATABASE_GUARD: TEST_GUARD,
+  UNIPLAN_TEST_DATABASE_SCHEMA: TEST_SCHEMA,
 };
 
 run('npx', ['prisma', 'migrate', 'deploy'], environment);

@@ -1,5 +1,9 @@
-import type { PrismaClient } from '@prisma/client';
+import { Prisma, type PrismaClient } from '@prisma/client';
 import { prisma } from '@/lib/db';
+import {
+  type CompanyMutationOptions,
+  withCompanyMutationTransaction,
+} from '@/lib/domain/concurrency';
 import { isInternalMenuHref } from '@/lib/navigation';
 import {
   ConflictError,
@@ -48,7 +52,7 @@ async function requireValidParent(
   companyId: string,
   menuItemId: string | null,
   parentId: string | null | undefined,
-  databaseClient: PrismaClient,
+  databaseClient: Prisma.TransactionClient,
 ) {
   if (!parentId) return;
   if (parentId === menuItemId) {
@@ -85,58 +89,65 @@ export async function createNavigationMenuItem(
   administratorUserId: string,
   input: NavigationMenuInput,
   databaseClient: PrismaClient = prisma,
+  transactionOptions: CompanyMutationOptions = {},
 ) {
-  await requireValidParent(
+  return withCompanyMutationTransaction(
     companyId,
-    null,
-    input.parentId,
     databaseClient,
-  );
-  return databaseClient.$transaction(async (databaseTransaction) => {
-    const menuItem = await databaseTransaction.menuItem.create({
-      data: {
+    async (databaseTransaction) => {
+      await requireValidParent(
         companyId,
-        code: requiredText(input.code, 'code'),
-        label: requiredText(input.label, 'label'),
-        href: validateHref(input.href),
-        resourceCode: validateResourceCode(input.resourceCode),
-        parentId: input.parentId ?? null,
-        sortOrder: input.sortOrder ?? 0,
-      },
-    });
-    const administrativeRoles = await databaseTransaction.role.findMany({
-      where: {
-        companyId,
-        active: true,
-        userRoles: { some: { userId: administratorUserId } },
-        permissions: {
-          some: {
-            canAdmin: true,
-            menuItem: { companyId, resourceCode: 'settings.navigation' },
+        null,
+        input.parentId,
+        databaseTransaction,
+      );
+      const menuItem = await databaseTransaction.menuItem.create({
+        data: {
+          companyId,
+          code: requiredText(input.code, 'code'),
+          label: requiredText(input.label, 'label'),
+          href: validateHref(input.href),
+          resourceCode: validateResourceCode(input.resourceCode),
+          parentId: input.parentId ?? null,
+          sortOrder: input.sortOrder ?? 0,
+        },
+      });
+      const administrativeRoles = await databaseTransaction.role.findMany({
+        where: {
+          companyId,
+          active: true,
+          userRoles: { some: { userId: administratorUserId } },
+          permissions: {
+            some: {
+              canAdmin: true,
+              menuItem: { companyId, resourceCode: 'settings.navigation' },
+            },
           },
         },
-      },
-      select: { id: true },
-    });
-    if (administrativeRoles.length === 0) {
-      throw new ConflictError(
-        'No administrative role is available for the new navigation item',
-        'NAVIGATION_PERMISSION_MISSING',
-      );
-    }
-    await databaseTransaction.rolePermission.createMany({
-      data: administrativeRoles.map((role) => ({
-        roleId: role.id,
-        menuItemId: menuItem.id,
-        canRead: true,
-        canCreate: true,
-        canUpdate: true,
-        canDelete: true,
-        canAdmin: true,
-      })),
-    });
-    return menuItem;
-  });
+        select: { id: true },
+      });
+      if (administrativeRoles.length === 0) {
+        throw new ConflictError(
+          'No administrative role is available for the new navigation item',
+          'NAVIGATION_PERMISSION_MISSING',
+        );
+      }
+      await databaseTransaction.rolePermission.createMany({
+        data: administrativeRoles.map((role) => ({
+          companyId,
+          roleId: role.id,
+          menuItemId: menuItem.id,
+          canRead: true,
+          canCreate: true,
+          canUpdate: true,
+          canDelete: true,
+          canAdmin: true,
+        })),
+      });
+      return menuItem;
+    },
+    transactionOptions,
+  );
 }
 
 export async function updateNavigationMenuItem(
@@ -144,60 +155,82 @@ export async function updateNavigationMenuItem(
   menuItemId: string,
   input: Partial<NavigationMenuInput>,
   databaseClient: PrismaClient = prisma,
+  transactionOptions: CompanyMutationOptions = {},
 ) {
-  const existingMenuItem = await databaseClient.menuItem.findFirst({
-    where: { id: menuItemId, companyId },
-    select: { id: true },
-  });
-  if (!existingMenuItem) throw new NotFoundError('Navigation item not found');
-  if (input.parentId !== undefined) {
-    await requireValidParent(
-      companyId,
-      menuItemId,
-      input.parentId,
-      databaseClient,
-    );
-  }
-  return databaseClient.menuItem.update({
-    where: { id: menuItemId, companyId },
-    data: {
-      ...(input.code !== undefined
-        ? { code: requiredText(input.code, 'code') }
-        : {}),
-      ...(input.label !== undefined
-        ? { label: requiredText(input.label, 'label') }
-        : {}),
-      ...(input.href !== undefined ? { href: validateHref(input.href) } : {}),
-      ...(input.resourceCode !== undefined
-        ? { resourceCode: validateResourceCode(input.resourceCode) }
-        : {}),
-      ...(input.parentId !== undefined ? { parentId: input.parentId } : {}),
-      ...(input.sortOrder !== undefined ? { sortOrder: input.sortOrder } : {}),
+  return withCompanyMutationTransaction(
+    companyId,
+    databaseClient,
+    async (databaseTransaction) => {
+      const existingMenuItem = await databaseTransaction.menuItem.findFirst({
+        where: { id: menuItemId, companyId },
+        select: { id: true },
+      });
+      if (!existingMenuItem)
+        throw new NotFoundError('Navigation item not found');
+      if (input.parentId !== undefined) {
+        await requireValidParent(
+          companyId,
+          menuItemId,
+          input.parentId,
+          databaseTransaction,
+        );
+      }
+      return databaseTransaction.menuItem.update({
+        where: { id: menuItemId, companyId },
+        data: {
+          ...(input.code !== undefined
+            ? { code: requiredText(input.code, 'code') }
+            : {}),
+          ...(input.label !== undefined
+            ? { label: requiredText(input.label, 'label') }
+            : {}),
+          ...(input.href !== undefined
+            ? { href: validateHref(input.href) }
+            : {}),
+          ...(input.resourceCode !== undefined
+            ? { resourceCode: validateResourceCode(input.resourceCode) }
+            : {}),
+          ...(input.parentId !== undefined ? { parentId: input.parentId } : {}),
+          ...(input.sortOrder !== undefined
+            ? { sortOrder: input.sortOrder }
+            : {}),
+        },
+      });
     },
-  });
+    transactionOptions,
+  );
 }
 
 export async function deactivateNavigationMenuItem(
   companyId: string,
   menuItemId: string,
   databaseClient: PrismaClient = prisma,
+  transactionOptions: CompanyMutationOptions = {},
 ) {
-  const existingMenuItem = await databaseClient.menuItem.findFirst({
-    where: { id: menuItemId, companyId },
-    select: {
-      id: true,
-      children: { where: { active: true }, select: { id: true }, take: 1 },
+  return withCompanyMutationTransaction(
+    companyId,
+    databaseClient,
+    async (databaseTransaction) => {
+      const existingMenuItem = await databaseTransaction.menuItem.findFirst({
+        where: { id: menuItemId, companyId },
+        select: {
+          id: true,
+          children: { where: { active: true }, select: { id: true }, take: 1 },
+        },
+      });
+      if (!existingMenuItem)
+        throw new NotFoundError('Navigation item not found');
+      if (existingMenuItem.children.length > 0) {
+        throw new ConflictError(
+          'Navigation items with active children cannot be deactivated',
+          'NAVIGATION_HAS_CHILDREN',
+        );
+      }
+      return databaseTransaction.menuItem.update({
+        where: { id: menuItemId, companyId },
+        data: { active: false },
+      });
     },
-  });
-  if (!existingMenuItem) throw new NotFoundError('Navigation item not found');
-  if (existingMenuItem.children.length > 0) {
-    throw new ConflictError(
-      'Navigation items with active children cannot be deactivated',
-      'NAVIGATION_HAS_CHILDREN',
-    );
-  }
-  return databaseClient.menuItem.update({
-    where: { id: menuItemId, companyId },
-    data: { active: false },
-  });
+    transactionOptions,
+  );
 }

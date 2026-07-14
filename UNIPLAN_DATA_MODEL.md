@@ -573,3 +573,9 @@ memos
 3. AI 분석을 위해 날짜, 상태, 금액, 수량 컬럼은 명확히 둔다.
 4. 개인정보/민감정보는 MVP에서 최소화한다.
 5. 자연어 질의는 이 테이블에 직접 자유 SQL을 날리지 않고, query template/view를 통해 접근한다.
+
+## 8. U9 테넌트 관계 규칙
+
+PostgreSQL 운영 스키마의 테넌트 소유 테이블은 기본 `id`와 별도로 `(companyId, id)` unique key를 가진다. 자식과 조인 테이블(`auth_sessions`, `user_roles`, `role_permissions`, `bom_versions`, `bom_components`, `sales_order_items`, `invoice_items`, `payments` 포함)에도 `companyId`를 저장하고 부모의 복합 키를 참조한다. 따라서 전역적으로 유효한 다른 회사의 `id`를 넣어도 데이터베이스가 관계를 거부한다.
+
+기존 데이터 backfill은 부모로부터 회사 ID를 채우기 전에 모든 다중 부모 관계의 회사가 같은지 검사한다. 불일치가 있으면 마이그레이션이 실패하며, 임의의 부모를 기준으로 소유권을 덮어쓰지 않는다.

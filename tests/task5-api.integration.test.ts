@@ -1,15 +1,9 @@
 import { ItemType } from '@prisma/client';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { POST as createItemRequest } from '@/app/api/inventory/items/route';
-import {
-  PATCH as updateStockRequest,
-} from '@/app/api/inventory/stock/route';
-import {
-  POST as postInventoryRequest,
-} from '@/app/api/inventory/transactions/route';
-import {
-  POST as createNavigationRequest,
-} from '@/app/api/settings/navigation/route';
+import { PATCH as updateStockRequest } from '@/app/api/inventory/stock/route';
+import { POST as postInventoryRequest } from '@/app/api/inventory/transactions/route';
+import { POST as createNavigationRequest } from '@/app/api/settings/navigation/route';
 import { createAuthSession, SESSION_COOKIE_NAME } from '@/lib/auth/session';
 import { createItem } from '@/lib/domain/items';
 import { createWarehouse } from '@/lib/domain/inventory';
@@ -52,7 +46,11 @@ async function createSessionAuthorization(
     },
   });
   await testDatabaseClient.userRole.create({
-    data: { userId: user.id, roleId: administratorRole.id },
+    data: {
+      companyId: company.id,
+      userId: user.id,
+      roleId: administratorRole.id,
+    },
   });
   for (const [resourceCode, permissionFlags] of Object.entries(
     permissionsByResource,
@@ -68,6 +66,7 @@ async function createSessionAuthorization(
     });
     await testDatabaseClient.rolePermission.create({
       data: {
+        companyId: company.id,
         roleId: administratorRole.id,
         menuItemId: menuItem.id,
         ...permissionFlags,

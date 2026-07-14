@@ -240,6 +240,16 @@ export type QueryTemplate = {
 - 운영 환경은 하나의 명시적 HTTPS `UNIPLAN_APP_ORIGIN`만 신뢰하며 요청 URL이나 forwarded host로 대체하지 않는다.
 - 외부 스케줄러가 `npm run auth:cleanup`을 호출해 만료 limiter 버킷과 보존기간이 지난 만료/폐기 세션을 정리한다. 이 저장소에서는 cron을 생성하지 않는다.
 
+### U9 테넌트 무결성과 동시성 프로토콜
+
+- 모든 테넌트 소유 관계는 PostgreSQL의 `(companyId, id)` 대체 키와 복합 외래 키로 방어한다. 애플리케이션의 `companyId` 조건도 그대로 유지한다.
+- U9 마이그레이션은 기존 관계의 회사 불일치를 먼저 검사한다. 불일치가 하나라도 있으면 관계명을 포함한 오류로 전체 트랜잭션을 중단하고 소유권을 자동 수정하지 않는다.
+- 품목, 창고, 재고 전기, BOM, 품목 카테고리, 내비게이션의 모든 쓰기는 `uniplan:u9:company-mutation:{companyId}`를 해시한 하나의 회사별 PostgreSQL advisory transaction lock을 먼저 획득한다.
+- 하나의 회사별 키만 사용하므로 전역 잠금 순서는 항상 동일하다. 잠금 후 활성 상태, 재고, 사용 여부, BOM 출력/구성품/고정 하위 버전, 트리 순환을 다시 조회하고 같은 serializable transaction에서 기록한다.
+- `P2034`, SQLSTATE `40001`, `40P01`은 최대 4회(호출자가 조정해도 6회 상한) 재시도하며, 소진 시 `CONCURRENT_MUTATION_CONFLICT`를 반환한다.
+- 이 보수적 프로토콜은 같은 회사의 관련 쓰기를 직렬화한다. 현재 MVP의 정확성 우선 선택이며, 쓰기 처리량이 병목이 되면 동일한 순서를 보존하는 세분화된 키로 후속 분할한다.
+- 재고 idempotency hash는 검증된 명령의 표준 표현을 사용한다. Decimal은 최소 표준 문자열, 텍스트는 저장 규칙과 같은 trim/null 규칙, 시간은 ISO, 논리 라인은 정렬한다. `createdById`는 불변 헤더에 저장되므로 operation identity에 포함한다.
+
 ## 9. 데모 데이터 전략
 
 MVP seed는 실제 easierp 데이터를 직접 넣지 않고, 다음 도메인의 가짜 데이터를 생성한다.

@@ -39,18 +39,28 @@ describe('tenant-scoped authorization', () => {
     });
     await testDatabaseClient.userRole.createMany({
       data: [
-        { userId: authorizedUser.id, roleId: readerRole.id },
-        { userId: authorizedUser.id, roleId: creatorRole.id },
+        {
+          companyId: company.id,
+          userId: authorizedUser.id,
+          roleId: readerRole.id,
+        },
+        {
+          companyId: company.id,
+          userId: authorizedUser.id,
+          roleId: creatorRole.id,
+        },
       ],
     });
     await testDatabaseClient.rolePermission.createMany({
       data: [
         {
+          companyId: company.id,
           roleId: readerRole.id,
           menuItemId: inventoryItemsMenu.id,
           canRead: true,
         },
         {
+          companyId: company.id,
           roleId: creatorRole.id,
           menuItemId: inventoryItemsMenu.id,
           canCreate: true,

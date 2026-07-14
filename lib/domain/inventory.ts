@@ -8,6 +8,11 @@ import {
 import { prisma } from '@/lib/db';
 import { explodeBomRevision } from '@/lib/domain/boms';
 import {
+  type CompanyMutationHooks,
+  type CompanyMutationOptions,
+  withCompanyMutationTransaction,
+} from '@/lib/domain/concurrency';
+import {
   ConflictError,
   NotFoundError,
   ValidationError,
@@ -77,7 +82,7 @@ type InventoryPostingMetadata = {
   payloadHash: string;
 };
 
-export type InventoryPostingHooks = {
+export type InventoryPostingHooks = CompanyMutationHooks & {
   afterEntries?: (
     databaseTransaction: Prisma.TransactionClient,
     transactionId: string,
@@ -154,16 +159,105 @@ function stableValue(valueToSerialize: unknown): unknown {
   return valueToSerialize;
 }
 
-export function hashInventoryPayload(input: PostInventoryTransactionInput) {
-  const inventoryPayload = {
-    ...input,
-    idempotencyKey: undefined,
+function canonicalLineOrder(
+  left: Record<string, string>,
+  right: Record<string, string>,
+) {
+  return JSON.stringify(left).localeCompare(JSON.stringify(right));
+}
+
+/**
+ * Actor identity is deliberately part of operation identity because it is
+ * persisted on the immutable transaction header. Line order is not: logical
+ * lines are sorted after decimal validation and normalization.
+ */
+export function canonicalizeInventoryPayload(
+  input: PostInventoryTransactionInput,
+) {
+  const commonPayload = {
+    type: input.type,
     occurredAt: input.occurredAt
-      ? new Date(input.occurredAt).toISOString()
+      ? parseOccurredAt(input.occurredAt).toISOString()
       : null,
+    reference: input.reference?.trim() || null,
+    memo: input.memo?.trim() || null,
+    createdById: input.createdById ?? null,
   };
+  if (
+    input.type === 'OPENING' ||
+    input.type === 'RECEIPT' ||
+    input.type === 'ISSUE'
+  ) {
+    if (input.lines.length === 0)
+      throw new ValidationError('At least one inventory line is required');
+    return {
+      ...commonPayload,
+      lines: input.lines
+        .map((line) => ({
+          itemId: line.itemId,
+          warehouseId: line.warehouseId,
+          quantity: positive(line.quantity).toFixed(),
+        }))
+        .sort(canonicalLineOrder),
+    };
+  }
+  if (input.type === 'TRANSFER') {
+    if (input.lines.length === 0)
+      throw new ValidationError('At least one transfer line is required');
+    return {
+      ...commonPayload,
+      lines: input.lines
+        .map((line) => {
+          if (line.fromWarehouseId === line.toWarehouseId)
+            throw new ValidationError(
+              'Transfer warehouses must differ',
+              'INVALID_TRANSFER',
+            );
+          return {
+            itemId: line.itemId,
+            fromWarehouseId: line.fromWarehouseId,
+            toWarehouseId: line.toWarehouseId,
+            quantity: positive(line.quantity).toFixed(),
+          };
+        })
+        .sort(canonicalLineOrder),
+    };
+  }
+  if (input.type === 'ADJUSTMENT') {
+    if (input.lines.length === 0)
+      throw new ValidationError('At least one adjustment line is required');
+    return {
+      ...commonPayload,
+      lines: input.lines
+        .map((line) => ({
+          itemId: line.itemId,
+          warehouseId: line.warehouseId,
+          quantityDelta: nonzero(line.quantityDelta).toFixed(),
+        }))
+        .sort(canonicalLineOrder),
+    };
+  }
+  if (input.type === 'PRODUCTION') {
+    return {
+      ...commonPayload,
+      bomVersionId: input.bomVersionId,
+      quantity: positive(input.quantity).toFixed(),
+      componentWarehouseId: input.componentWarehouseId,
+      outputWarehouseId: input.outputWarehouseId,
+    };
+  }
+  if (input.type === 'REVERSAL') {
+    return {
+      ...commonPayload,
+      originalTransactionId: input.originalTransactionId,
+    };
+  }
+  throw new ValidationError('Unsupported inventory transaction type');
+}
+
+export function hashInventoryPayload(input: PostInventoryTransactionInput) {
   return createHash('sha256')
-    .update(JSON.stringify(stableValue(inventoryPayload)))
+    .update(JSON.stringify(stableValue(canonicalizeInventoryPayload(input))))
     .digest('hex');
 }
 
@@ -462,25 +556,6 @@ function calculateBalanceUpdates(
   });
 }
 
-function isRetryable(postingError: unknown) {
-  if (
-    postingError instanceof Prisma.PrismaClientKnownRequestError &&
-    postingError.code === 'P2034'
-  )
-    return true;
-  const code = (
-    postingError as { code?: string; meta?: { code?: string } } | null
-  )?.code;
-  const sqlState = (postingError as { meta?: { code?: string } } | null)?.meta
-    ?.code;
-  return (
-    code === '40001' ||
-    code === '40P01' ||
-    sqlState === '40001' ||
-    sqlState === '40P01'
-  );
-}
-
 function isUniqueConflict(postingError: unknown) {
   return (
     postingError instanceof Prisma.PrismaClientKnownRequestError &&
@@ -623,51 +698,33 @@ export async function postInventoryTransaction(
   );
   if (existingInventoryTransaction) return existingInventoryTransaction;
 
-  const maxAttempts = Math.max(1, Math.min(options.maxAttempts ?? 4, 6));
-  // Serializable conflicts and deadlocks are transient, so retries are bounded to protect request latency.
-  for (
-    let attemptNumber = 1;
-    attemptNumber <= maxAttempts;
-    attemptNumber += 1
-  ) {
-    try {
-      return await databaseClient.$transaction(
-        (databaseTransaction) =>
-          executeInventoryPostingTransaction(
-            companyId,
-            input,
-            postingMetadata,
-            options.hooks,
-            databaseTransaction,
-          ),
-        {
-          isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
-          maxWait: 10_000,
-          timeout: 20_000,
-        },
-      );
-    } catch (postingError) {
-      if (isUniqueConflict(postingError)) {
-        const concurrentlyPostedTransaction =
-          await findIdempotentInventoryTransaction(
-            companyId,
-            idempotencyKey,
-            payloadHash,
-            databaseClient,
-          );
-        if (concurrentlyPostedTransaction) return concurrentlyPostedTransaction;
-      }
-      if (!isRetryable(postingError) || attemptNumber === maxAttempts)
-        throw postingError;
-      await new Promise((resolveRetryDelay) =>
-        setTimeout(resolveRetryDelay, attemptNumber * 10),
-      );
+  try {
+    return await withCompanyMutationTransaction(
+      companyId,
+      databaseClient,
+      (databaseTransaction) =>
+        executeInventoryPostingTransaction(
+          companyId,
+          input,
+          postingMetadata,
+          options.hooks,
+          databaseTransaction,
+        ),
+      { maxAttempts: options.maxAttempts, hooks: options.hooks },
+    );
+  } catch (postingError) {
+    if (isUniqueConflict(postingError)) {
+      const concurrentlyPostedTransaction =
+        await findIdempotentInventoryTransaction(
+          companyId,
+          idempotencyKey,
+          payloadHash,
+          databaseClient,
+        );
+      if (concurrentlyPostedTransaction) return concurrentlyPostedTransaction;
     }
+    throw postingError;
   }
-  throw new ConflictError(
-    'Inventory transaction retry limit exceeded',
-    'INVENTORY_RETRY_EXHAUSTED',
-  );
 }
 
 export type ReconciliationMismatch = {
@@ -740,15 +797,22 @@ export async function createWarehouse(
   companyId: string,
   input: { code: string; name: string; location?: string | null },
   databaseClient: PrismaClient = prisma,
+  transactionOptions: CompanyMutationOptions = {},
 ) {
-  return databaseClient.warehouse.create({
-    data: {
-      companyId,
-      code: requiredText(input.code, 'code'),
-      name: requiredText(input.name, 'name'),
-      location: input.location?.trim() || null,
-    },
-  });
+  return withCompanyMutationTransaction(
+    companyId,
+    databaseClient,
+    (databaseTransaction) =>
+      databaseTransaction.warehouse.create({
+        data: {
+          companyId,
+          code: requiredText(input.code, 'code'),
+          name: requiredText(input.name, 'name'),
+          location: input.location?.trim() || null,
+        },
+      }),
+    transactionOptions,
+  );
 }
 
 export async function updateWarehouse(
@@ -756,54 +820,70 @@ export async function updateWarehouse(
   warehouseId: string,
   input: { code?: string; name?: string; location?: string | null },
   databaseClient: PrismaClient = prisma,
+  transactionOptions: CompanyMutationOptions = {},
 ) {
-  const warehouse = await databaseClient.warehouse.findFirst({
-    where: { id: warehouseId, companyId },
-    select: { id: true },
-  });
-  if (!warehouse) throw new NotFoundError('Warehouse not found');
-  return databaseClient.warehouse.update({
-    where: { id: warehouseId, companyId },
-    data: {
-      ...(input.code !== undefined
-        ? { code: requiredText(input.code, 'code') }
-        : {}),
-      ...(input.name !== undefined
-        ? { name: requiredText(input.name, 'name') }
-        : {}),
-      ...(input.location !== undefined
-        ? { location: input.location?.trim() || null }
-        : {}),
+  return withCompanyMutationTransaction(
+    companyId,
+    databaseClient,
+    async (databaseTransaction) => {
+      const warehouse = await databaseTransaction.warehouse.findFirst({
+        where: { id: warehouseId, companyId },
+        select: { id: true },
+      });
+      if (!warehouse) throw new NotFoundError('Warehouse not found');
+      return databaseTransaction.warehouse.update({
+        where: { id: warehouseId, companyId },
+        data: {
+          ...(input.code !== undefined
+            ? { code: requiredText(input.code, 'code') }
+            : {}),
+          ...(input.name !== undefined
+            ? { name: requiredText(input.name, 'name') }
+            : {}),
+          ...(input.location !== undefined
+            ? { location: input.location?.trim() || null }
+            : {}),
+        },
+      });
     },
-  });
+    transactionOptions,
+  );
 }
 
 export async function deactivateWarehouse(
   companyId: string,
   warehouseId: string,
   databaseClient: PrismaClient = prisma,
+  transactionOptions: CompanyMutationOptions = {},
 ) {
-  const warehouse = await databaseClient.warehouse.findFirst({
-    where: { id: warehouseId, companyId },
-    select: {
-      id: true,
-      inventoryBalances: {
-        where: { quantity: { not: 0 } },
-        select: { id: true },
-        take: 1,
-      },
+  return withCompanyMutationTransaction(
+    companyId,
+    databaseClient,
+    async (databaseTransaction) => {
+      const warehouse = await databaseTransaction.warehouse.findFirst({
+        where: { id: warehouseId, companyId },
+        select: {
+          id: true,
+          inventoryBalances: {
+            where: { quantity: { not: 0 } },
+            select: { id: true },
+            take: 1,
+          },
+        },
+      });
+      if (!warehouse) throw new NotFoundError('Warehouse not found');
+      if (warehouse.inventoryBalances.length > 0)
+        throw new ConflictError(
+          'Warehouse with on-hand inventory cannot be deactivated',
+          'WAREHOUSE_HAS_STOCK',
+        );
+      return databaseTransaction.warehouse.update({
+        where: { id: warehouseId, companyId },
+        data: { active: false },
+      });
     },
-  });
-  if (!warehouse) throw new NotFoundError('Warehouse not found');
-  if (warehouse.inventoryBalances.length > 0)
-    throw new ConflictError(
-      'Warehouse with on-hand inventory cannot be deactivated',
-      'WAREHOUSE_HAS_STOCK',
-    );
-  return databaseClient.warehouse.update({
-    where: { id: warehouseId, companyId },
-    data: { active: false },
-  });
+    transactionOptions,
+  );
 }
 
 export async function updateSafetyQuantity(

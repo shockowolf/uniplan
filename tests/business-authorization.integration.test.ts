@@ -1,17 +1,13 @@
 import { ItemType } from '@prisma/client';
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { POST as chatRequest } from '@/app/api/chat/route';
-import {
-  GET as getBomsRequest,
-} from '@/app/api/inventory/boms/route';
+import { GET as getBomsRequest } from '@/app/api/inventory/boms/route';
 import {
   GET as getItemsRequest,
   PATCH as updateItemRequest,
   POST as createItemRequest,
 } from '@/app/api/inventory/items/route';
-import {
-  POST as postInventoryRequest,
-} from '@/app/api/inventory/transactions/route';
+import { POST as postInventoryRequest } from '@/app/api/inventory/transactions/route';
 import { createAuthSession, SESSION_COOKIE_NAME } from '@/lib/auth/session';
 import {
   activateBomRevision,
@@ -59,7 +55,7 @@ async function createTenantIdentity(
     },
   });
   await testDatabaseClient.userRole.create({
-    data: { userId: user.id, roleId: role.id },
+    data: { companyId: company.id, userId: user.id, roleId: role.id },
   });
   for (const [resourceCode, permissionFlags] of Object.entries(
     permissionsByResource,
@@ -75,6 +71,7 @@ async function createTenantIdentity(
     });
     await testDatabaseClient.rolePermission.create({
       data: {
+        companyId: company.id,
         roleId: role.id,
         menuItemId: menuItem.id,
         ...permissionFlags,
@@ -152,7 +149,10 @@ describe('U7 business API session authorization and tenant scope', () => {
       items: { code: string; companyId: string }[];
     };
     expect(responseBody.items).toEqual([
-      expect.objectContaining({ code: 'OWN-ITEM', companyId: tenant.company.id }),
+      expect.objectContaining({
+        code: 'OWN-ITEM',
+        companyId: tenant.company.id,
+      }),
     ]);
   });
 
@@ -243,17 +243,29 @@ describe('U7 business API session authorization and tenant scope', () => {
     });
     const foreignMaterial = await createItem(
       tenantB.company.id,
-      { code: 'FOREIGN-MAT', name: 'Foreign Material', itemType: ItemType.RAW_MATERIAL },
+      {
+        code: 'FOREIGN-MAT',
+        name: 'Foreign Material',
+        itemType: ItemType.RAW_MATERIAL,
+      },
       testDatabaseClient,
     );
     const foreignOutput = await createItem(
       tenantB.company.id,
-      { code: 'FOREIGN-OUT', name: 'Foreign Output', itemType: ItemType.FINISHED_GOOD },
+      {
+        code: 'FOREIGN-OUT',
+        name: 'Foreign Output',
+        itemType: ItemType.FINISHED_GOOD,
+      },
       testDatabaseClient,
     );
     const foreignBom = await createBom(
       tenantB.company.id,
-      { code: 'FOREIGN-BOM', name: 'Foreign BOM', outputItemId: foreignOutput.id },
+      {
+        code: 'FOREIGN-BOM',
+        name: 'Foreign BOM',
+        outputItemId: foreignOutput.id,
+      },
       testDatabaseClient,
     );
     await replaceDraftBomComponents(
@@ -293,7 +305,11 @@ describe('U7 business API session authorization and tenant scope', () => {
     });
     const foreignItem = await createItem(
       tenantB.company.id,
-      { code: 'FOREIGN', name: 'Original Foreign Name', itemType: ItemType.RAW_MATERIAL },
+      {
+        code: 'FOREIGN',
+        name: 'Original Foreign Name',
+        itemType: ItemType.RAW_MATERIAL,
+      },
       testDatabaseClient,
     );
 
@@ -313,7 +329,9 @@ describe('U7 business API session authorization and tenant scope', () => {
 
     expect(response.status).toBe(404);
     await expect(
-      testDatabaseClient.item.findUniqueOrThrow({ where: { id: foreignItem.id } }),
+      testDatabaseClient.item.findUniqueOrThrow({
+        where: { id: foreignItem.id },
+      }),
     ).resolves.toMatchObject({
       companyId: tenantB.company.id,
       name: 'Original Foreign Name',
@@ -327,7 +345,11 @@ describe('U7 business API session authorization and tenant scope', () => {
     const tenantB = await createTenantIdentity('U7-CREATOR-B', {});
     const item = await createItem(
       tenantA.company.id,
-      { code: 'RECEIPT-ITEM', name: 'Receipt Item', itemType: ItemType.RAW_MATERIAL },
+      {
+        code: 'RECEIPT-ITEM',
+        name: 'Receipt Item',
+        itemType: ItemType.RAW_MATERIAL,
+      },
       testDatabaseClient,
     );
     const warehouse = await createWarehouse(
@@ -454,12 +476,20 @@ describe('U7 business API session authorization and tenant scope', () => {
     const [itemA, itemB, warehouseA, warehouseB] = await Promise.all([
       createItem(
         tenantA.company.id,
-        { code: 'AI-A', name: 'AI Tenant A Item', itemType: ItemType.RAW_MATERIAL },
+        {
+          code: 'AI-A',
+          name: 'AI Tenant A Item',
+          itemType: ItemType.RAW_MATERIAL,
+        },
         testDatabaseClient,
       ),
       createItem(
         tenantB.company.id,
-        { code: 'AI-B', name: 'AI Tenant B Item', itemType: ItemType.RAW_MATERIAL },
+        {
+          code: 'AI-B',
+          name: 'AI Tenant B Item',
+          itemType: ItemType.RAW_MATERIAL,
+        },
         testDatabaseClient,
       ),
       createWarehouse(
@@ -480,7 +510,9 @@ describe('U7 business API session authorization and tenant scope', () => {
           type: 'RECEIPT',
           idempotencyKey: 'u7-ai-a-opening',
           createdById: tenantA.user.id,
-          lines: [{ itemId: itemA.id, warehouseId: warehouseA.id, quantity: 1 }],
+          lines: [
+            { itemId: itemA.id, warehouseId: warehouseA.id, quantity: 1 },
+          ],
         },
         { db: testDatabaseClient },
       ),
@@ -490,7 +522,9 @@ describe('U7 business API session authorization and tenant scope', () => {
           type: 'RECEIPT',
           idempotencyKey: 'u7-ai-b-opening',
           createdById: tenantB.user.id,
-          lines: [{ itemId: itemB.id, warehouseId: warehouseB.id, quantity: 1 }],
+          lines: [
+            { itemId: itemB.id, warehouseId: warehouseB.id, quantity: 1 },
+          ],
         },
         { db: testDatabaseClient },
       ),

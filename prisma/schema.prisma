@@ -72,18 +72,20 @@ model User {
   updatedAt    DateTime @updatedAt
 
   company               Company                @relation(fields: [companyId], references: [id])
-  domain                Domain?                @relation(fields: [domainId], references: [id])
+  domain                Domain?                @relation(fields: [companyId, domainId], references: [companyId, id], onDelete: NoAction)
   userRoles             UserRole[]
   authSessions          AuthSession[]
   inventoryTransactions InventoryTransaction[] @relation("InventoryTransactionCreator")
 
   @@unique([companyId, email])
+  @@unique([companyId, id])
   @@index([companyId, status])
   @@map("users")
 }
 
 model AuthSession {
   id        String    @id @default(cuid())
+  companyId String
   userId    String
   tokenHash String    @unique @db.Char(64)
   expiresAt DateTime
@@ -91,8 +93,9 @@ model AuthSession {
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [companyId, userId], references: [companyId, id], onDelete: Cascade)
 
+  @@unique([companyId, id])
   @@index([userId, revokedAt])
   @@index([expiresAt])
   @@map("auth_sessions")
@@ -128,6 +131,7 @@ model Domain {
 
   @@unique([companyId, code])
   @@unique([companyId, domainName])
+  @@unique([companyId, id])
   @@map("domains")
 }
 
@@ -143,25 +147,28 @@ model Role {
   updatedAt   DateTime @updatedAt
 
   company     Company          @relation(fields: [companyId], references: [id])
-  domain      Domain?          @relation(fields: [domainId], references: [id])
+  domain      Domain?          @relation(fields: [companyId, domainId], references: [companyId, id], onDelete: NoAction)
   userRoles   UserRole[]
   permissions RolePermission[]
 
   @@unique([companyId, code])
+  @@unique([companyId, id])
   @@index([companyId, active])
   @@map("roles")
 }
 
 model UserRole {
   id        String   @id @default(cuid())
+  companyId String
   userId    String
   roleId    String
   createdAt DateTime @default(now())
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [companyId, userId], references: [companyId, id], onDelete: Cascade)
+  role Role @relation(fields: [companyId, roleId], references: [companyId, id], onDelete: Cascade)
 
   @@unique([userId, roleId])
+  @@unique([companyId, id])
   @@map("user_roles")
 }
 
@@ -180,19 +187,21 @@ model MenuItem {
   updatedAt    DateTime @updatedAt
 
   company     Company          @relation(fields: [companyId], references: [id])
-  domain      Domain?          @relation(fields: [domainId], references: [id])
-  parent      MenuItem?        @relation("MenuTree", fields: [parentId], references: [id])
+  domain      Domain?          @relation(fields: [companyId, domainId], references: [companyId, id], onDelete: NoAction)
+  parent      MenuItem?        @relation("MenuTree", fields: [companyId, parentId], references: [companyId, id], onDelete: NoAction)
   children    MenuItem[]       @relation("MenuTree")
   permissions RolePermission[]
 
   @@unique([companyId, code])
   @@unique([companyId, resourceCode])
+  @@unique([companyId, id])
   @@index([companyId, parentId, active, sortOrder])
   @@map("menu_items")
 }
 
 model RolePermission {
   id         String   @id @default(cuid())
+  companyId  String
   roleId     String
   menuItemId String
   canRead    Boolean  @default(false)
@@ -203,10 +212,11 @@ model RolePermission {
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
-  role     Role     @relation(fields: [roleId], references: [id], onDelete: Cascade)
-  menuItem MenuItem @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
+  role     Role     @relation(fields: [companyId, roleId], references: [companyId, id], onDelete: Cascade)
+  menuItem MenuItem @relation(fields: [companyId, menuItemId], references: [companyId, id], onDelete: Cascade)
 
   @@unique([roleId, menuItemId])
+  @@unique([companyId, id])
   @@map("role_permissions")
 }
 
@@ -230,6 +240,7 @@ model Customer {
   serviceCases  ServiceCase[]
 
   @@unique([companyId, code])
+  @@unique([companyId, id])
   @@index([companyId, name])
   @@map("customers")
 }
@@ -250,6 +261,7 @@ model Employee {
   salesOrders SalesOrder[]
 
   @@unique([companyId, employeeNo])
+  @@unique([companyId, id])
   @@map("employees")
 }
 
@@ -265,11 +277,12 @@ model ItemCategory {
   updatedAt   DateTime @updatedAt
 
   company  Company        @relation(fields: [companyId], references: [id])
-  parent   ItemCategory?  @relation("ItemCategoryTree", fields: [parentId], references: [id])
+  parent   ItemCategory?  @relation("ItemCategoryTree", fields: [companyId, parentId], references: [companyId, id], onDelete: NoAction)
   children ItemCategory[] @relation("ItemCategoryTree")
   items    Item[]
 
   @@unique([companyId, code])
+  @@unique([companyId, id])
   @@index([companyId, parentId, active])
   @@map("item_categories")
 }
@@ -293,7 +306,7 @@ model Item {
   updatedAt      DateTime @updatedAt
 
   company           Company            @relation(fields: [companyId], references: [id])
-  category          ItemCategory?      @relation(fields: [categoryId], references: [id])
+  category          ItemCategory?      @relation(fields: [companyId, categoryId], references: [companyId, id], onDelete: NoAction)
   outputBom         Bom?
   bomComponents     BomComponent[]     @relation("BomComponentItem")
   inventoryBalances InventoryBalance[]
@@ -303,6 +316,7 @@ model Item {
   serviceCases      ServiceCase[]
 
   @@unique([companyId, code])
+  @@unique([companyId, id])
   @@index([companyId, name])
   @@index([companyId, active, itemType])
   @@map("items")
@@ -319,16 +333,19 @@ model Bom {
   updatedAt    DateTime @updatedAt
 
   company    Company      @relation(fields: [companyId], references: [id])
-  outputItem Item         @relation(fields: [outputItemId], references: [id])
+  outputItem Item         @relation(fields: [companyId, outputItemId], references: [companyId, id])
   versions   BomVersion[]
 
   @@unique([companyId, code])
+  @@unique([companyId, id])
+  @@unique([companyId, outputItemId])
   @@index([companyId, active])
   @@map("boms")
 }
 
 model BomVersion {
   id          String           @id @default(cuid())
+  companyId   String
   bomId       String
   revision    Int
   status      BomVersionStatus @default(DRAFT)
@@ -338,18 +355,20 @@ model BomVersion {
   createdAt   DateTime         @default(now())
   updatedAt   DateTime         @updatedAt
 
-  bom                   Bom                    @relation(fields: [bomId], references: [id])
+  bom                   Bom                    @relation(fields: [companyId, bomId], references: [companyId, id])
   components            BomComponent[]         @relation("BomVersionComponents")
   pinnedByComponents    BomComponent[]         @relation("PinnedChildBomVersion")
   inventoryTransactions InventoryTransaction[]
 
   @@unique([bomId, revision])
+  @@unique([companyId, id])
   @@index([bomId, status])
   @@map("bom_versions")
 }
 
 model BomComponent {
   id                String   @id @default(cuid())
+  companyId         String
   bomVersionId      String
   componentItemId   String
   childBomVersionId String?
@@ -358,11 +377,12 @@ model BomComponent {
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
-  bomVersion      BomVersion  @relation("BomVersionComponents", fields: [bomVersionId], references: [id], onDelete: Cascade)
-  componentItem   Item        @relation("BomComponentItem", fields: [componentItemId], references: [id])
-  childBomVersion BomVersion? @relation("PinnedChildBomVersion", fields: [childBomVersionId], references: [id])
+  bomVersion      BomVersion  @relation("BomVersionComponents", fields: [companyId, bomVersionId], references: [companyId, id], onDelete: Cascade)
+  componentItem   Item        @relation("BomComponentItem", fields: [companyId, componentItemId], references: [companyId, id])
+  childBomVersion BomVersion? @relation("PinnedChildBomVersion", fields: [companyId, childBomVersionId], references: [companyId, id], onDelete: NoAction)
 
   @@unique([bomVersionId, componentItemId])
+  @@unique([companyId, id])
   @@index([childBomVersionId])
   @@map("bom_components")
 }
@@ -382,6 +402,7 @@ model Warehouse {
   inventoryEntries  InventoryEntry[]
 
   @@unique([companyId, code])
+  @@unique([companyId, id])
   @@index([companyId, active])
   @@map("warehouses")
 }
@@ -397,10 +418,11 @@ model InventoryBalance {
   updatedAt      DateTime @updatedAt
 
   company   Company   @relation(fields: [companyId], references: [id])
-  item      Item      @relation(fields: [itemId], references: [id])
-  warehouse Warehouse @relation(fields: [warehouseId], references: [id])
+  item      Item      @relation(fields: [companyId, itemId], references: [companyId, id])
+  warehouse Warehouse @relation(fields: [companyId, warehouseId], references: [companyId, id])
 
   @@unique([companyId, itemId, warehouseId])
+  @@unique([companyId, id])
   @@index([companyId, warehouseId, itemId])
   @@map("inventory_balances")
 }
@@ -420,13 +442,15 @@ model InventoryTransaction {
   createdAt       DateTime                 @default(now())
 
   company    Company               @relation(fields: [companyId], references: [id])
-  createdBy  User?                 @relation("InventoryTransactionCreator", fields: [createdById], references: [id])
-  bomVersion BomVersion?           @relation(fields: [bomVersionId], references: [id])
-  reversalOf InventoryTransaction? @relation("InventoryReversal", fields: [reversalOfId], references: [id])
+  createdBy  User?                 @relation("InventoryTransactionCreator", fields: [companyId, createdById], references: [companyId, id], onDelete: NoAction)
+  bomVersion BomVersion?           @relation(fields: [companyId, bomVersionId], references: [companyId, id], onDelete: NoAction)
+  reversalOf InventoryTransaction? @relation("InventoryReversal", fields: [companyId, reversalOfId], references: [companyId, id], onDelete: NoAction)
   reversal   InventoryTransaction? @relation("InventoryReversal")
   entries    InventoryEntry[]
 
   @@unique([companyId, idempotencyKey])
+  @@unique([companyId, id])
+  @@unique([companyId, reversalOfId])
   @@index([companyId, occurredAt])
   @@map("inventory_transactions")
 }
@@ -442,11 +466,12 @@ model InventoryEntry {
   createdAt     DateTime @default(now())
 
   company     Company              @relation(fields: [companyId], references: [id])
-  transaction InventoryTransaction @relation(fields: [transactionId], references: [id])
-  item        Item                 @relation(fields: [itemId], references: [id])
-  warehouse   Warehouse            @relation(fields: [warehouseId], references: [id])
+  transaction InventoryTransaction @relation(fields: [companyId, transactionId], references: [companyId, id])
+  item        Item                 @relation(fields: [companyId, itemId], references: [companyId, id])
+  warehouse   Warehouse            @relation(fields: [companyId, warehouseId], references: [companyId, id])
 
   @@unique([transactionId, lineNumber])
+  @@unique([companyId, id])
   @@index([companyId, warehouseId, itemId])
   @@map("inventory_entries")
 }
@@ -467,18 +492,20 @@ model SalesOrder {
   updatedAt       DateTime @updatedAt
 
   company       Company          @relation(fields: [companyId], references: [id])
-  customer      Customer         @relation(fields: [customerId], references: [id])
-  salesEmployee Employee?        @relation(fields: [salesEmployeeId], references: [id])
+  customer      Customer         @relation(fields: [companyId, customerId], references: [companyId, id])
+  salesEmployee Employee?        @relation(fields: [companyId, salesEmployeeId], references: [companyId, id], onDelete: NoAction)
   items         SalesOrderItem[]
   invoices      Invoice[]
 
   @@unique([companyId, orderNo])
+  @@unique([companyId, id])
   @@index([companyId, orderDate])
   @@map("sales_orders")
 }
 
 model SalesOrderItem {
   id           String  @id @default(cuid())
+  companyId    String
   salesOrderId String
   itemId       String?
   itemName     String
@@ -488,9 +515,10 @@ model SalesOrderItem {
   taxAmount    Decimal @db.Decimal(18, 2)
   totalAmount  Decimal @db.Decimal(18, 2)
 
-  salesOrder SalesOrder @relation(fields: [salesOrderId], references: [id], onDelete: Cascade)
-  item       Item?      @relation(fields: [itemId], references: [id])
+  salesOrder SalesOrder @relation(fields: [companyId, salesOrderId], references: [companyId, id], onDelete: Cascade)
+  item       Item?      @relation(fields: [companyId, itemId], references: [companyId, id], onDelete: NoAction)
 
+  @@unique([companyId, id])
   @@map("sales_order_items")
 }
 
@@ -513,18 +541,20 @@ model Invoice {
   updatedAt       DateTime  @updatedAt
 
   company    Company       @relation(fields: [companyId], references: [id])
-  customer   Customer      @relation(fields: [customerId], references: [id])
-  salesOrder SalesOrder?   @relation(fields: [salesOrderId], references: [id])
+  customer   Customer      @relation(fields: [companyId, customerId], references: [companyId, id])
+  salesOrder SalesOrder?   @relation(fields: [companyId, salesOrderId], references: [companyId, id], onDelete: NoAction)
   items      InvoiceItem[]
   payments   Payment[]
 
   @@unique([companyId, invoiceNo])
+  @@unique([companyId, id])
   @@index([companyId, issueDate])
   @@map("invoices")
 }
 
 model InvoiceItem {
   id           String  @id @default(cuid())
+  companyId    String
   invoiceId    String
   itemId       String?
   itemName     String
@@ -534,14 +564,16 @@ model InvoiceItem {
   taxAmount    Decimal @db.Decimal(18, 2)
   totalAmount  Decimal @db.Decimal(18, 2)
 
-  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
-  item    Item?   @relation(fields: [itemId], references: [id])
+  invoice Invoice @relation(fields: [companyId, invoiceId], references: [companyId, id], onDelete: Cascade)
+  item    Item?   @relation(fields: [companyId, itemId], references: [companyId, id], onDelete: NoAction)
 
+  @@unique([companyId, id])
   @@map("invoice_items")
 }
 
 model Payment {
   id        String   @id @default(cuid())
+  companyId String
   invoiceId String
   paidAt    DateTime
   amount    Decimal  @db.Decimal(18, 2)
@@ -549,8 +581,9 @@ model Payment {
   memo      String?
   createdAt DateTime @default(now())
 
-  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  invoice Invoice @relation(fields: [companyId, invoiceId], references: [companyId, id], onDelete: Cascade)
 
+  @@unique([companyId, id])
   @@map("payments")
 }
 
@@ -566,8 +599,9 @@ model Consultation {
   updatedAt  DateTime @updatedAt
 
   company  Company   @relation(fields: [companyId], references: [id])
-  customer Customer? @relation(fields: [customerId], references: [id])
+  customer Customer? @relation(fields: [companyId, customerId], references: [companyId, id], onDelete: NoAction)
 
+  @@unique([companyId, id])
   @@index([companyId, status])
   @@map("consultations")
 }
@@ -586,9 +620,10 @@ model ServiceCase {
   memo        String?
 
   company  Company   @relation(fields: [companyId], references: [id])
-  customer Customer? @relation(fields: [customerId], references: [id])
-  item     Item?     @relation(fields: [itemId], references: [id])
+  customer Customer? @relation(fields: [companyId, customerId], references: [companyId, id], onDelete: NoAction)
+  item     Item?     @relation(fields: [companyId, itemId], references: [companyId, id], onDelete: NoAction)
 
+  @@unique([companyId, id])
   @@index([companyId, status])
   @@map("service_cases")
 }

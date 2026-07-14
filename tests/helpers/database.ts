@@ -2,12 +2,28 @@ import { PrismaClient } from '@prisma/client';
 
 export const testDatabaseClient = new PrismaClient();
 
-export async function resetTestDatabase() {
-  if (process.env.UNIPLAN_TEST_DATABASE_GUARD !== 'enabled') {
+const TEST_SCHEMA = 'uniplan_test_u9';
+const TEST_GUARD = 'uniplan_test_u9_only';
+
+export async function assertDisposableTestSchema() {
+  if (
+    process.env.UNIPLAN_TEST_DATABASE_GUARD !== TEST_GUARD ||
+    process.env.UNIPLAN_TEST_DATABASE_SCHEMA !== TEST_SCHEMA
+  ) {
+    throw new Error('Refusing destructive SQL without the U9 test guard.');
+  }
+  const [databaseContext] = await testDatabaseClient.$queryRaw<
+    { schemaName: string }[]
+  >`SELECT current_schema() AS "schemaName"`;
+  if (databaseContext?.schemaName !== TEST_SCHEMA) {
     throw new Error(
-      'Refusing to truncate PostgreSQL outside the isolated npm test runner.',
+      `Refusing destructive SQL in schema ${databaseContext?.schemaName ?? 'unknown'}.`,
     );
   }
+}
+
+export async function resetTestDatabase() {
+  await assertDisposableTestSchema();
   await testDatabaseClient.$executeRawUnsafe(`
     TRUNCATE TABLE
       "login_rate_limit_buckets",
