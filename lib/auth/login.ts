@@ -4,7 +4,11 @@ import {
   validateNewPassword,
   verifyPassword,
 } from '@/lib/auth/password';
-import { createAuthSession } from '@/lib/auth/session';
+import { clearLoginIdentityBucket } from '@/lib/auth/rate-limit';
+import {
+  createAuthSession,
+  enforceActiveSessionLimit,
+} from '@/lib/auth/session';
 import { prisma } from '@/lib/db';
 
 const MAX_COMPANY_CODE_LENGTH = 100;
@@ -41,7 +45,11 @@ function hasBoundedLoginCredentials(credentials: LoginCredentials) {
 export async function loginWithPassword(
   suppliedCredentials: LoginCredentials,
   databaseClient: PrismaClient = prisma,
-  options: { now?: Date; ttlSeconds?: number } = {},
+  options: {
+    now?: Date;
+    ttlSeconds?: number;
+    identityBucketKey?: string;
+  } = {},
 ) {
   const credentials = normalizeLoginCredentials(suppliedCredentials);
   if (!hasBoundedLoginCredentials(credentials)) return null;
@@ -73,9 +81,35 @@ export async function loginWithPassword(
   );
   if (!invitedUser || !passwordMatches) return null;
 
-  const authSession = await createAuthSession(invitedUser.id, databaseClient, {
-    now: options.now,
-    ttlSeconds: options.ttlSeconds,
+  const loginCompletedAt = options.now ?? new Date();
+  const authSession = await databaseClient.$transaction(async (transaction) => {
+    // Serialize successful logins for this user so the active-session cap is
+    // reliable across app processes. The limiter bucket is cleared in the same
+    // transaction as session creation, so a rolled-back login cannot relax it.
+    await transaction.$queryRaw`
+      SELECT "id" FROM "users" WHERE "id" = ${invitedUser.id} FOR UPDATE
+    `;
+    const createdSession = await createAuthSession(
+      invitedUser.id,
+      transaction,
+      {
+        now: loginCompletedAt,
+        ttlSeconds: options.ttlSeconds,
+      },
+    );
+    await enforceActiveSessionLimit(
+      invitedUser.id,
+      createdSession.sessionId,
+      transaction,
+      loginCompletedAt,
+    );
+    if (options.identityBucketKey) {
+      await clearLoginIdentityBucket(
+        options.identityBucketKey,
+        transaction,
+      );
+    }
+    return createdSession;
   });
   return {
     ...authSession,

@@ -6,10 +6,13 @@ export const SESSION_COOKIE_NAME = 'uniplan_session';
 export const DEFAULT_SESSION_TTL_SECONDS = 8 * 60 * 60;
 export const MIN_SESSION_TTL_SECONDS = 5 * 60;
 export const MAX_SESSION_TTL_SECONDS = 30 * 24 * 60 * 60;
+export const MAX_ACTIVE_SESSIONS_PER_USER = 10;
 
 const SESSION_TOKEN_BYTES = 32;
 const SESSION_TOKEN_PATTERN = /^[A-Za-z0-9_-]{43}$/;
 const SESSION_CREATION_ATTEMPTS = 2;
+
+type SessionDatabaseClient = PrismaClient | Prisma.TransactionClient;
 
 export type SessionContext = {
   sessionId: string;
@@ -61,7 +64,7 @@ export function hashSessionToken(token: string) {
 
 export async function createAuthSession(
   userId: string,
-  databaseClient: PrismaClient = prisma,
+  databaseClient: SessionDatabaseClient = prisma,
   options: { now?: Date; ttlSeconds?: number } = {},
 ) {
   const now = options.now ?? new Date();
@@ -95,9 +98,34 @@ export async function createAuthSession(
   throw new Error('Unable to create an authentication session.');
 }
 
+export async function enforceActiveSessionLimit(
+  userId: string,
+  newestSessionId: string,
+  databaseClient: SessionDatabaseClient,
+  now = new Date(),
+) {
+  await databaseClient.$executeRaw(Prisma.sql`
+    UPDATE "auth_sessions"
+    SET "revokedAt" = ${now}, "updatedAt" = ${now}
+    WHERE "id" IN (
+      SELECT "id"
+      FROM "auth_sessions"
+      WHERE
+        "userId" = ${userId}
+        AND "revokedAt" IS NULL
+        AND "expiresAt" > ${now}
+      ORDER BY
+        CASE WHEN "id" = ${newestSessionId} THEN 0 ELSE 1 END,
+        "createdAt" DESC,
+        "id" DESC
+      OFFSET ${MAX_ACTIVE_SESSIONS_PER_USER}
+    )
+  `);
+}
+
 export async function resolveSessionToken(
   token: string,
-  databaseClient: PrismaClient = prisma,
+  databaseClient: SessionDatabaseClient = prisma,
   now = new Date(),
 ): Promise<SessionContext | null> {
   if (!isValidSessionToken(token)) return null;
@@ -147,7 +175,7 @@ export async function resolveSessionToken(
 
 export async function revokeSessionToken(
   token: string,
-  databaseClient: PrismaClient = prisma,
+  databaseClient: SessionDatabaseClient = prisma,
   revokedAt = new Date(),
 ) {
   if (!isValidSessionToken(token)) return false;

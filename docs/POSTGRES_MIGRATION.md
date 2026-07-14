@@ -24,6 +24,7 @@ npm run db:migrate
 - `db:migrate` applies committed migrations without resetting data.
 - `db:reset` is destructive and is only for a disposable local or test database.
 - `db:seed` is idempotent. Opening stock is posted through the immutable inventory ledger.
+- `npm test` deploys migrations to `TEST_DATABASE_URL` when provided, or to an isolated `uniplan_test` schema derived from `DATABASE_URL`; it never truncates the application schema.
 
 ## Numeric and inventory invariants
 
@@ -34,3 +35,5 @@ npm run db:migrate
 - The balance table is a projection that can be checked with ledger reconciliation.
 
 Production credentials must be supplied outside the repository. AI analysis continues to use approved, read-only templates and tenant-scoped permission checks.
+
+Authentication retention cleanup is intentionally scheduler-agnostic. Run `npm run auth:cleanup` from an external scheduler; it deletes expired login limiter buckets immediately and expired/revoked sessions after `UNIPLAN_AUTH_RECORD_RETENTION_DAYS` (default 7).

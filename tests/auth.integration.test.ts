@@ -1,8 +1,10 @@
-import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { POST as loginRequest } from '@/app/api/auth/login/route';
 import { POST as logoutRequest } from '@/app/api/auth/logout/route';
 import { GET as sessionRequest } from '@/app/api/auth/session/route';
 import { SESSION_COOKIE_NAME } from '@/lib/auth/session';
+import { cleanupAuthenticationState } from '@/lib/auth/cleanup';
+import { MAX_LOGIN_BODY_BYTES } from '@/lib/auth/login-body';
 import { hashPassword, verifyPassword } from '@/lib/auth/password';
 import { loginWithPassword, setInvitedUserPassword } from '@/lib/auth/login';
 import {
@@ -10,6 +12,7 @@ import {
   resolveSessionToken,
 } from '@/lib/auth/session';
 import { isDemoAuthenticationEnabled } from '@/lib/auth/permissions';
+import { prisma } from '@/lib/db';
 import {
   createTestCompany,
   resetTestDatabase,
@@ -58,8 +61,32 @@ function validCredentials(password = validPassword) {
   return { companyCode, email: invitedEmail, password };
 }
 
+function credentialsBodyOfSize(targetBytes: number) {
+  const emptyBody = JSON.stringify({ ...validCredentials(), padding: '' });
+  const paddingBytes = targetBytes - Buffer.byteLength(emptyBody, 'utf8');
+  if (paddingBytes < 0) throw new Error('Target login body is too small.');
+  const body = JSON.stringify({
+    ...validCredentials(),
+    padding: 'x'.repeat(paddingBytes),
+  });
+  expect(Buffer.byteLength(body, 'utf8')).toBe(targetBytes);
+  return body;
+}
+
+function rawLoginRequest(body: string) {
+  return new Request('http://localhost/api/auth/login', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Origin: 'http://localhost',
+    },
+    body,
+  });
+}
+
 describe('invite-only database session authentication', () => {
   beforeEach(resetTestDatabase);
+  afterEach(() => vi.restoreAllMocks());
   afterAll(() => testDatabaseClient.$disconnect());
 
   it('logs in an active invited user using company-scoped email', async () => {
@@ -269,11 +296,51 @@ describe('invite-only database session authentication', () => {
     );
     const setCookie = successResponse.headers.get('set-cookie');
     expect(successResponse.status).toBe(200);
+    expect(successResponse.headers.get('cache-control')).toBe(
+      'private, no-store',
+    );
+    expect(successResponse.headers.get('vary')).toBe('Cookie');
     expect(setCookie).toContain(`${SESSION_COOKIE_NAME}=`);
     expect(setCookie).toContain('HttpOnly');
     expect(setCookie).toContain('SameSite=Lax');
     expect(setCookie).toContain('Path=/');
     expect(setCookie).toMatch(/Max-Age=\d+/);
+  });
+
+  it('rejects login bodies only after the exact 4 KiB boundary', async () => {
+    await createInvitedUser();
+
+    const boundaryResponse = await loginRequest(
+      rawLoginRequest(credentialsBodyOfSize(MAX_LOGIN_BODY_BYTES)),
+    );
+    expect(boundaryResponse.status).toBe(200);
+
+    const oversizedResponse = await loginRequest(
+      rawLoginRequest(credentialsBodyOfSize(MAX_LOGIN_BODY_BYTES + 1)),
+    );
+    expect(oversizedResponse.status).toBe(413);
+    await expect(oversizedResponse.json()).resolves.toMatchObject({
+      error: { code: 'REQUEST_TOO_LARGE' },
+    });
+  });
+
+  it('returns 429 with Retry-After when parallel requests exhaust an identity bucket', async () => {
+    await createInvitedUser();
+    const responses = await Promise.all(
+      Array.from({ length: 6 }, () =>
+        loginRequest(
+          authRequest('/api/auth/login', {
+            origin: 'http://localhost',
+            body: validCredentials('parallel wrong password'),
+          }),
+        ),
+      ),
+    );
+
+    expect(responses.filter((response) => response.status === 401)).toHaveLength(5);
+    const limitedResponse = responses.find((response) => response.status === 429);
+    expect(limitedResponse).toBeDefined();
+    expect(Number(limitedResponse?.headers.get('retry-after'))).toBeGreaterThan(0);
   });
 
   it('resolves the session API and makes duplicate concurrent logout safe', async () => {
@@ -320,6 +387,83 @@ describe('invite-only database session authentication', () => {
       }),
     );
     expect(thirdLogout.status).toBe(204);
+
+    const staleSessionResponse = await sessionRequest(
+      authRequest('/api/auth/session', { token }),
+    );
+    expect(staleSessionResponse.status).toBe(401);
+    expect(staleSessionResponse.headers.get('set-cookie')).toContain('Max-Age=0');
+  });
+
+  it('clears the cookie and reports an error when logout revocation fails', async () => {
+    await createInvitedUser();
+    const loginResult = await loginWithPassword(
+      validCredentials(),
+      testDatabaseClient,
+    );
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    vi.spyOn(prisma.authSession, 'updateMany').mockRejectedValueOnce(
+      new Error('synthetic database outage'),
+    );
+
+    const response = await logoutRequest(
+      authRequest('/api/auth/logout', {
+        origin: 'http://localhost',
+        token: loginResult!.token,
+      }),
+    );
+
+    expect(response.status).toBe(503);
+    expect(response.headers.get('set-cookie')).toContain('Max-Age=0');
+    await expect(response.json()).resolves.toMatchObject({
+      error: { code: 'SESSION_REVOCATION_FAILED' },
+    });
+    await expect(
+      resolveSessionToken(loginResult!.token, testDatabaseClient),
+    ).resolves.not.toBeNull();
+  });
+
+  it('bounds active sessions and cleans expired authentication state', async () => {
+    const { user } = await createInvitedUser();
+    for (let index = 0; index < 11; index += 1) {
+      await loginWithPassword(validCredentials(), testDatabaseClient);
+    }
+    await expect(
+      testDatabaseClient.authSession.count({
+        where: { userId: user.id, revokedAt: null },
+      }),
+    ).resolves.toBe(10);
+
+    const now = new Date('2026-07-14T12:00:00.000Z');
+    const oldSession = await testDatabaseClient.authSession.findFirstOrThrow({
+      where: { userId: user.id },
+      orderBy: { createdAt: 'asc' },
+    });
+    await testDatabaseClient.authSession.update({
+      where: { id: oldSession.id },
+      data: {
+        expiresAt: new Date(now.getTime() - 8 * 24 * 60 * 60 * 1_000),
+        revokedAt: new Date(now.getTime() - 8 * 24 * 60 * 60 * 1_000),
+      },
+    });
+    await testDatabaseClient.loginRateLimitBucket.create({
+      data: {
+        bucketKey: 'a'.repeat(64),
+        attemptCount: 1,
+        windowStartedAt: new Date(now.getTime() - 120_000),
+        windowExpiresAt: new Date(now.getTime() - 60_000),
+      },
+    });
+
+    await expect(
+      cleanupAuthenticationState(testDatabaseClient, {
+        now,
+        retentionDays: 7,
+      }),
+    ).resolves.toEqual({
+      deletedLoginRateLimitBuckets: 1,
+      deletedAuthSessions: 1,
+    });
   });
 
   it('never enables the demo identity fallback in production', () => {

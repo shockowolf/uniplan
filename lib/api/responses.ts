@@ -72,6 +72,40 @@ const defaultFieldByErrorCode: Record<string, string> = {
   NAVIGATION_CYCLE: 'parentId',
 };
 
+export function authenticatedResponseHeaders(additionalHeaders?: HeadersInit) {
+  const headers = new Headers(additionalHeaders);
+  headers.set('Cache-Control', 'private, no-store');
+  const varyValues = (headers.get('Vary') ?? '')
+    .split(',')
+    .map((value) => value.trim())
+    .filter(Boolean);
+  if (!varyValues.some((value) => value.toLowerCase() === 'cookie')) {
+    varyValues.push('Cookie');
+  }
+  headers.set('Vary', varyValues.join(', '));
+  return headers;
+}
+
+export function authenticatedJsonResponse(
+  payload: unknown,
+  init: ResponseInit = {},
+) {
+  return Response.json(payload, {
+    ...init,
+    headers: authenticatedResponseHeaders(init.headers),
+  });
+}
+
+export function authenticatedResponse(
+  body: BodyInit | null,
+  init: ResponseInit = {},
+) {
+  return new Response(body, {
+    ...init,
+    headers: authenticatedResponseHeaders(init.headers),
+  });
+}
+
 function inferValidationField(errorMessage: string) {
   const fieldMatch = /^([A-Za-z][A-Za-z0-9]*) (?:is|required|must|cannot)/.exec(
     errorMessage,
@@ -80,7 +114,7 @@ function inferValidationField(errorMessage: string) {
 }
 
 export function apiSuccess(payload: unknown, status = 200) {
-  return Response.json(payload, { status });
+  return authenticatedJsonResponse(payload, { status });
 }
 
 export function apiError(
@@ -98,7 +132,7 @@ export function apiError(
       defaultFieldByErrorCode[requestError.code] ??
       inferValidationField(requestError.message);
     const fieldErrors: FieldErrors = fieldName ? { [fieldName]: message } : {};
-    return Response.json(
+    return authenticatedJsonResponse(
       { error: { code: requestError.code, message, fieldErrors } },
       { status: requestError.status },
     );
@@ -107,7 +141,7 @@ export function apiError(
     requestError instanceof Prisma.PrismaClientKnownRequestError &&
     requestError.code === 'P2002'
   ) {
-    return Response.json(
+    return authenticatedJsonResponse(
       {
         error: {
           code: 'DUPLICATE_VALUE',
@@ -118,8 +152,10 @@ export function apiError(
       { status: 409 },
     );
   }
-  console.error('UNIPLAN API request failed', requestError);
-  return Response.json(
+  const errorType =
+    requestError instanceof Error ? requestError.name : 'UnknownError';
+  console.error(`UNIPLAN API request failed (${errorType})`);
+  return authenticatedJsonResponse(
     {
       error: {
         code: 'INTERNAL_ERROR',

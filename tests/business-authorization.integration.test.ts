@@ -122,6 +122,8 @@ describe('U7 business API session authorization and tenant scope', () => {
     );
 
     expect(response.status).toBe(401);
+    expect(response.headers.get('cache-control')).toBe('private, no-store');
+    expect(response.headers.get('vary')).toBe('Cookie');
     await expect(response.json()).resolves.toMatchObject({
       error: { code: 'UNAUTHORIZED' },
     });
@@ -144,6 +146,8 @@ describe('U7 business API session authorization and tenant scope', () => {
     );
 
     expect(response.status).toBe(200);
+    expect(response.headers.get('cache-control')).toBe('private, no-store');
+    expect(response.headers.get('vary')).toBe('Cookie');
     const responseBody = (await response.json()) as {
       items: { code: string; companyId: string }[];
     };
@@ -170,6 +174,8 @@ describe('U7 business API session authorization and tenant scope', () => {
     );
 
     expect(response.status).toBe(403);
+    expect(response.headers.get('cache-control')).toBe('private, no-store');
+    expect(response.headers.get('vary')).toBe('Cookie');
     await expect(response.json()).resolves.toMatchObject({
       error: { code: 'FORBIDDEN' },
     });

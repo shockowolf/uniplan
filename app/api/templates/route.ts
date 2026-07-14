@@ -1,4 +1,5 @@
 import { buildClassifierPrompt } from '@/lib/ai/intent';
+import { apiError, authenticatedJsonResponse } from '@/lib/api/responses';
 import { authorizeRequest } from '@/lib/auth/request';
 import { DomainError } from '@/lib/domain/errors';
 import { templates } from '@/lib/templates/registry';
@@ -6,7 +7,7 @@ import { templates } from '@/lib/templates/registry';
 export async function GET(request: Request) {
   try {
     await authorizeRequest(request, 'dashboard.analytics', 'read');
-    return Response.json({
+    return authenticatedJsonResponse({
       intentMode: process.env.UNIPLAN_INTENT_MODE ?? 'keyword',
       templates: templates.map((template) => ({
         id: template.id,
@@ -18,11 +19,11 @@ export async function GET(request: Request) {
     });
   } catch (requestError) {
     if (requestError instanceof DomainError) {
-      return Response.json(
+      return authenticatedJsonResponse(
         { error: requestError.code },
         { status: requestError.status },
       );
     }
-    throw requestError;
+    return apiError(requestError);
   }
 }

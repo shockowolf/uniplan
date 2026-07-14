@@ -1,4 +1,5 @@
 import { answerQuestion } from '@/lib/ai/orchestrator';
+import { apiError, authenticatedJsonResponse } from '@/lib/api/responses';
 import { authorizeRequest } from '@/lib/auth/request';
 import { DomainError } from '@/lib/domain/errors';
 
@@ -13,19 +14,22 @@ export async function POST(request: Request) {
     const message = requestBody.message?.trim();
 
     if (!message) {
-      return Response.json({ error: 'message is required' }, { status: 400 });
+      return authenticatedJsonResponse(
+        { error: 'message is required' },
+        { status: 400 },
+      );
     }
 
-    return Response.json(
+    return authenticatedJsonResponse(
       await answerQuestion(message, sessionContext.companyId),
     );
   } catch (requestError) {
     if (requestError instanceof DomainError) {
-      return Response.json(
+      return authenticatedJsonResponse(
         { error: requestError.code },
         { status: requestError.status },
       );
     }
-    throw requestError;
+    return apiError(requestError);
   }
 }

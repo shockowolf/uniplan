@@ -230,6 +230,16 @@ export type QueryTemplate = {
 - 주민번호, 계좌번호, 비밀번호, 토큰은 MVP schema에 넣지 않는다.
 - 전화번호/이메일은 권한에 따라 마스킹 가능하게 둔다.
 
+### U8 인증 경계
+
+- 로그인 본문은 4 KiB로 제한하고, JSON 전체를 무제한으로 메모리에 올리기 전에 스트림 크기를 검사한다.
+- 비밀번호 검증 전 PostgreSQL 원자적 upsert로 정규화된 회사/이메일 버킷(15분당 5회)과 전체 버킷(1분당 120회)을 함께 소비한다.
+- limiter 테이블에는 SHA-256 또는 서버 비밀키 HMAC으로 만든 64자 버킷 키만 저장하며 회사 코드, 이메일, IP 원문은 저장하지 않는다.
+- 로그인 성공 시 세션 생성, 사용자별 활성 세션 10개 제한, identity limiter 버킷 해제를 한 트랜잭션으로 처리한다.
+- 인증된 API 응답은 성공/오류 모두 `Cache-Control: private, no-store`와 `Vary: Cookie`를 적용한다.
+- 운영 환경은 하나의 명시적 HTTPS `UNIPLAN_APP_ORIGIN`만 신뢰하며 요청 URL이나 forwarded host로 대체하지 않는다.
+- 외부 스케줄러가 `npm run auth:cleanup`을 호출해 만료 limiter 버킷과 보존기간이 지난 만료/폐기 세션을 정리한다. 이 저장소에서는 cron을 생성하지 않는다.
+
 ## 9. 데모 데이터 전략
 
 MVP seed는 실제 easierp 데이터를 직접 넣지 않고, 다음 도메인의 가짜 데이터를 생성한다.

@@ -66,7 +66,7 @@ There is no public signup. After an operator creates an invited company user, se
 npm run auth:set-password -- --company COMPANY_CODE --email user@example.com
 ```
 
-The command reads the password without echoing it and revokes the user's existing sessions. Session duration is configured with `UNIPLAN_AUTH_SESSION_TTL_SECONDS` (default 8 hours, maximum 30 days), and production deployments should set `UNIPLAN_APP_ORIGIN` to the public application origin. Legacy demo authorization is opt-in for local development with `UNIPLAN_DEMO_AUTH_ENABLED=true` and is always disabled when `NODE_ENV=production`.
+The command reads the password without echoing it and revokes the user's existing sessions. Session duration is configured with `UNIPLAN_AUTH_SESSION_TTL_SECONDS` (default 8 hours, maximum 30 days). Production requires `UNIPLAN_APP_ORIGIN` to be one explicit HTTPS origin. Set a private `UNIPLAN_AUTH_RATE_LIMIT_SECRET` to HMAC login limiter keys (without it, opaque SHA-256 keys are used), and schedule `npm run auth:cleanup` externally to remove expired limiter buckets and retained expired/revoked sessions. `UNIPLAN_AUTH_RECORD_RETENTION_DAYS` defaults to 7 days. Legacy demo authorization is opt-in for local development with `UNIPLAN_DEMO_AUTH_ENABLED=true` and is always disabled when `NODE_ENV=production`.
 
 ## Start Here
 
