@@ -51,7 +51,7 @@ export function buildClassifierPrompt(message: string) {
       keywords: template.keywords
     }));
 
-  return `You are an intent classifier for UniPlan AI ERP.\n\nRules:\n- Choose exactly one templateId from the allowed list, or null if unsupported.\n- Never generate SQL.\n- Only extract safe parameters such as date range, limit, customer/product/employee names.\n- Return strict JSON only.\n\nAllowed templates:\n${JSON.stringify(templateList, null, 2)}\n\nUser message:\n${JSON.stringify(message)}\n\nReturn shape:\n{\"templateId\": string|null, \"confidence\": number, \"params\": object, \"reason\": string}`;
+  return `You are an intent classifier for UNIPLAN AI ERP.\n\nRules:\n- Choose exactly one templateId from the allowed list, or null if unsupported.\n- Never generate SQL.\n- Only extract safe parameters such as date range, limit, customer/item/employee names.\n- Return strict JSON only.\n\nAllowed templates:\n${JSON.stringify(templateList, null, 2)}\n\nUser message:\n${JSON.stringify(message)}\n\nReturn shape:\n{\"templateId\": string|null, \"confidence\": number, \"params\": object, \"reason\": string}`;
 }
 
 /**

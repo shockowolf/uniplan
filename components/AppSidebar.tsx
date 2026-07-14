@@ -12,7 +12,7 @@ const examples = [
   { label: '미수금', text: '미수금 많은 거래처 TOP 10' },
   { label: '거래처 미수', text: '구리정밀 미수금 보여줘' },
   { label: '재고 위험', text: '재고 부족한 품목' },
-  { label: '상품 재고', text: 'QR 주문 태블릿 재고 보여줘' },
+  { label: '품목 재고', text: 'QR 주문 태블릿 재고 보여줘' },
   { label: '전체 현황', text: '오늘 사업 현황 요약' }
 ];
 
@@ -25,66 +25,118 @@ export function AppSidebar({ menuItems }: AppSidebarProps) {
   const searchParams = useSearchParams();
   const currentHref = searchParams.size > 0 ? `${pathname}?${searchParams.toString()}` : pathname;
   const isActive = (href: string) => (href.includes('?') ? currentHref === href : pathname === href);
-  const activeGroupKey = useMemo(
-    () =>
-      menuItems.find((item) => {
-        const childActive = item.children?.some((child) => isActive(child.href)) ?? false;
-        return Boolean(item.children?.length) && (isActive(item.href) || childActive);
-      })?.href ?? null,
-    [currentHref, menuItems, pathname]
+  const activeGroupKeys = useMemo(() => {
+    const ancestorKeys: string[] = [];
+    const findActiveBranch = (
+      navigationItems: SidebarMenuItem[],
+      ancestors: string[],
+    ): boolean => {
+      for (const navigationItem of navigationItems) {
+        const navigationItemAncestors = navigationItem.children?.length
+          ? [...ancestors, navigationItem.href]
+          : ancestors;
+        if (isActive(navigationItem.href)) {
+          ancestorKeys.push(...navigationItemAncestors);
+          return true;
+        }
+        if (
+          navigationItem.children &&
+          findActiveBranch(navigationItem.children, navigationItemAncestors)
+        ) {
+          return true;
+        }
+      }
+      return false;
+    };
+    findActiveBranch(menuItems, []);
+    return ancestorKeys;
+  }, [currentHref, menuItems, pathname]);
+  const [openGroupKeys, setOpenGroupKeys] = useState<ReadonlySet<string>>(
+    () => new Set(activeGroupKeys),
   );
-  const [openGroupKey, setOpenGroupKey] = useState<string | null>(activeGroupKey);
 
   useEffect(() => {
-    setOpenGroupKey(activeGroupKey);
-  }, [activeGroupKey]);
+    setOpenGroupKeys((currentKeys) =>
+      new Set([...currentKeys, ...activeGroupKeys]),
+    );
+  }, [activeGroupKeys]);
+
+  const containsActiveItem = (navigationItem: SidebarMenuItem): boolean =>
+    isActive(navigationItem.href) ||
+    Boolean(navigationItem.children?.some(containsActiveItem));
+
+  const toggleGroup = (groupKey: string) => {
+    setOpenGroupKeys((currentKeys) => {
+      const nextKeys = new Set(currentKeys);
+      if (nextKeys.has(groupKey)) nextKeys.delete(groupKey);
+      else nextKeys.add(groupKey);
+      return nextKeys;
+    });
+  };
+
+  const renderNavigationItems = (
+    navigationItems: SidebarMenuItem[],
+    depth = 0,
+  ) =>
+    navigationItems.map((item) => {
+      const hasChildren = Boolean(item.children?.length);
+      const isOpen = openGroupKeys.has(item.href);
+      const itemActive = containsActiveItem(item);
+      return (
+        <div
+          className={hasChildren ? 'nav-group' : undefined}
+          key={`${item.href}-${item.label}`}
+        >
+          {hasChildren ? (
+            <button
+              aria-expanded={isOpen}
+              className={
+                itemActive
+                  ? 'nav-link nav-toggle active'
+                  : isOpen
+                    ? 'nav-link nav-toggle open'
+                    : 'nav-link nav-toggle'
+              }
+              onClick={() => toggleGroup(item.href)}
+              style={{ paddingLeft: `${18 + depth * 10}px` }}
+              type="button"
+            >
+              <span
+                aria-hidden="true"
+                className={isOpen ? 'nav-caret open' : 'nav-caret'}
+              />
+              <span className="nav-label">{item.label}</span>
+            </button>
+          ) : (
+            <Link
+              className={isActive(item.href) ? 'nav-link active' : 'nav-link'}
+              href={item.href}
+              style={{ paddingLeft: `${18 + depth * 10}px` }}
+            >
+              <span className="nav-label">{item.label}</span>
+            </Link>
+          )}
+          {hasChildren && isOpen ? (
+            <div className="nav-children">
+              {renderNavigationItems(item.children ?? [], depth + 1)}
+            </div>
+          ) : null}
+        </div>
+      );
+    });
 
   return (
     <aside className="app-sidebar">
-      <Link aria-label="UniPlan 홈으로 이동" className="brand-block" href="/">
+      <Link aria-label="UNIPLAN 홈으로 이동" className="brand-block" href="/">
         <div className="brand-mark">U</div>
         <div>
-          <div className="brand">UniPlan</div>
+          <div className="brand">UNIPLAN</div>
           <p>AI ERP</p>
         </div>
       </Link>
 
       <nav aria-label="주요 메뉴" className="nav-menu">
-        {menuItems.map((item) => {
-          const hasChildren = Boolean(item.children?.length);
-          const childActive = item.children?.some((child) => isActive(child.href)) ?? false;
-          const isOpen = openGroupKey === item.href;
-          const itemActive = isActive(item.href) || childActive;
-
-          return (
-            <div className={hasChildren ? 'nav-group' : undefined} key={`${item.href}-${item.label}`}>
-              {hasChildren ? (
-                <button
-                  aria-expanded={isOpen}
-                  className={itemActive ? 'nav-link nav-toggle active' : isOpen ? 'nav-link nav-toggle open' : 'nav-link nav-toggle'}
-                  onClick={() => setOpenGroupKey(isOpen ? null : item.href)}
-                  type="button"
-                >
-                  <span aria-hidden="true" className={isOpen ? 'nav-caret open' : 'nav-caret'} />
-                  <span className="nav-label">{item.label}</span>
-                </button>
-              ) : (
-                <Link className={isActive(item.href) ? 'nav-link active' : 'nav-link'} href={item.href}>
-                  <span className="nav-label">{item.label}</span>
-                </Link>
-              )}
-              {hasChildren && isOpen ? (
-                <div className="nav-children">
-                  {item.children?.map((child) => (
-                    <Link className={isActive(child.href) ? 'nav-link nav-child active' : 'nav-link nav-child'} href={child.href} key={`${child.href}-${child.label}`}>
-                      <span className="nav-label">{child.label}</span>
-                    </Link>
-                  ))}
-                </div>
-              ) : null}
-            </div>
-          );
-        })}
+        {renderNavigationItems(menuItems)}
       </nav>
 
       <section className="scenario-box">

@@ -3,33 +3,61 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
+}
+
+enum ItemType {
+  RAW_MATERIAL
+  COMPONENT
+  FINISHED_GOOD
+  CONSUMABLE
+  SERVICE
+}
+
+enum BomVersionStatus {
+  DRAFT
+  ACTIVE
+  RETIRED
+}
+
+enum InventoryTransactionType {
+  OPENING
+  RECEIPT
+  ISSUE
+  TRANSFER
+  ADJUSTMENT
+  PRODUCTION
+  REVERSAL
 }
 
 model Company {
   id        String   @id @default(cuid())
   code      String   @unique
   name      String
+  active    Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  users              User[]
-  domains            Domain[]
-  roles              Role[]
-  menus              Menu[]
-  menuNodes          MenuNode[]
-  customers          Customer[]
-  employees          Employee[]
-  productCategories  ProductCategory[]
-  products           Product[]
-  warehouses         Warehouse[]
-  inventoryBalances  InventoryBalance[]
-  inventoryMovements InventoryMovement[]
-  salesOrders        SalesOrder[]
-  invoices           Invoice[]
-  consultations      Consultation[]
-  serviceCases       ServiceCase[]
+  users                 User[]
+  domains               Domain[]
+  roles                 Role[]
+  menuItems             MenuItem[]
+  customers             Customer[]
+  employees             Employee[]
+  itemCategories        ItemCategory[]
+  items                 Item[]
+  boms                  Bom[]
+  warehouses            Warehouse[]
+  inventoryBalances     InventoryBalance[]
+  inventoryTransactions InventoryTransaction[]
+  inventoryEntries      InventoryEntry[]
+  salesOrders           SalesOrder[]
+  invoices              Invoice[]
+  consultations         Consultation[]
+  serviceCases          ServiceCase[]
+
+  @@map("companies")
 }
 
 model User {
@@ -43,11 +71,31 @@ model User {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  company   Company    @relation(fields: [companyId], references: [id])
-  domain    Domain?    @relation(fields: [domainId], references: [id])
-  userRoles UserRole[]
+  company               Company                @relation(fields: [companyId], references: [id])
+  domain                Domain?                @relation(fields: [domainId], references: [id])
+  userRoles             UserRole[]
+  authSessions          AuthSession[]
+  inventoryTransactions InventoryTransaction[] @relation("InventoryTransactionCreator")
 
   @@unique([companyId, email])
+  @@index([companyId, status])
+  @@map("users")
+}
+
+model AuthSession {
+  id        String    @id @default(cuid())
+  userId    String
+  tokenHash String    @unique @db.Char(64)
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, revokedAt])
+  @@index([expiresAt])
+  @@map("auth_sessions")
 }
 
 model Domain {
@@ -64,10 +112,11 @@ model Domain {
   company   Company    @relation(fields: [companyId], references: [id])
   users     User[]
   roles     Role[]
-  menuNodes MenuNode[]
+  menuItems MenuItem[]
 
   @@unique([companyId, code])
   @@unique([companyId, domainName])
+  @@map("domains")
 }
 
 model Role {
@@ -81,12 +130,14 @@ model Role {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  company     Company              @relation(fields: [companyId], references: [id])
-  domain      Domain?              @relation(fields: [domainId], references: [id])
+  company     Company          @relation(fields: [companyId], references: [id])
+  domain      Domain?          @relation(fields: [domainId], references: [id])
   userRoles   UserRole[]
-  permissions RoleMenuPermission[]
+  permissions RolePermission[]
 
   @@unique([companyId, code])
+  @@index([companyId, active])
+  @@map("roles")
 }
 
 model UserRole {
@@ -99,60 +150,40 @@ model UserRole {
   role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
 
   @@unique([userId, roleId])
+  @@map("user_roles")
 }
 
-model Menu {
+model MenuItem {
   id           String   @id @default(cuid())
   companyId    String
+  domainId     String?
+  parentId     String?
   code         String
   label        String
   href         String?
-  domainType   String   @default("ERP")
-  active       Boolean  @default(true)
+  resourceCode String
   sortOrder    Int      @default(0)
-  legacyMenuId String?
-  legacyTable  String   @default("tbcom_menu")
+  active       Boolean  @default(true)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  company Company    @relation(fields: [companyId], references: [id])
-  nodes   MenuNode[]
+  company     Company          @relation(fields: [companyId], references: [id])
+  domain      Domain?          @relation(fields: [domainId], references: [id])
+  parent      MenuItem?        @relation("MenuTree", fields: [parentId], references: [id])
+  children    MenuItem[]       @relation("MenuTree")
+  permissions RolePermission[]
 
   @@unique([companyId, code])
-  @@index([companyId, active, sortOrder])
+  @@unique([companyId, resourceCode])
+  @@index([companyId, parentId, active, sortOrder])
+  @@map("menu_items")
 }
 
-model MenuNode {
-  id          String   @id @default(cuid())
-  companyId   String
-  domainId    String?
-  menuId      String?
-  parentId    String?
-  label       String
-  href        String?
-  sortOrder   Int      @default(0)
-  active      Boolean  @default(true)
-  legacyMapId String?
-  legacyTable String   @default("tbcom_menu_map")
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  company     Company              @relation(fields: [companyId], references: [id])
-  domain      Domain?              @relation(fields: [domainId], references: [id])
-  menu        Menu?                @relation(fields: [menuId], references: [id])
-  parent      MenuNode?            @relation("MenuTree", fields: [parentId], references: [id])
-  children    MenuNode[]           @relation("MenuTree")
-  permissions RoleMenuPermission[]
-
-  @@index([companyId, domainId, parentId, sortOrder])
-  @@index([companyId, active])
-}
-
-model RoleMenuPermission {
+model RolePermission {
   id         String   @id @default(cuid())
   roleId     String
-  menuNodeId String
-  canRead    Boolean  @default(true)
+  menuItemId String
+  canRead    Boolean  @default(false)
   canCreate  Boolean  @default(false)
   canUpdate  Boolean  @default(false)
   canDelete  Boolean  @default(false)
@@ -161,9 +192,10 @@ model RoleMenuPermission {
   updatedAt  DateTime @updatedAt
 
   role     Role     @relation(fields: [roleId], references: [id], onDelete: Cascade)
-  menuNode MenuNode @relation(fields: [menuNodeId], references: [id], onDelete: Cascade)
+  menuItem MenuItem @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
 
-  @@unique([roleId, menuNodeId])
+  @@unique([roleId, menuItemId])
+  @@map("role_permissions")
 }
 
 model Customer {
@@ -187,6 +219,7 @@ model Customer {
 
   @@unique([companyId, code])
   @@index([companyId, name])
+  @@map("customers")
 }
 
 model Employee {
@@ -205,96 +238,205 @@ model Employee {
   salesOrders SalesOrder[]
 
   @@unique([companyId, employeeNo])
+  @@map("employees")
 }
 
-model ProductCategory {
-  id          String  @id @default(cuid())
+model ItemCategory {
+  id          String   @id @default(cuid())
   companyId   String
+  parentId    String?
   code        String
   name        String
   description String?
-  active      Boolean @default(true)
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
-  company  Company   @relation(fields: [companyId], references: [id])
-  products Product[]
+  company  Company        @relation(fields: [companyId], references: [id])
+  parent   ItemCategory?  @relation("ItemCategoryTree", fields: [parentId], references: [id])
+  children ItemCategory[] @relation("ItemCategoryTree")
+  items    Item[]
 
   @@unique([companyId, code])
+  @@index([companyId, parentId, active])
+  @@map("item_categories")
 }
 
-model Product {
-  id            String   @id @default(cuid())
-  companyId     String
-  categoryId    String?
-  code          String
-  name          String
-  productType   String   @default("product")
-  unit          String   @default("ea")
-  standardPrice Int      @default(0)
-  costPrice     Int      @default(0)
-  active        Boolean  @default(true)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+model Item {
+  id             String   @id @default(cuid())
+  companyId      String
+  categoryId     String?
+  code           String
+  name           String
+  itemType       ItemType
+  unit           String   @default("ea")
+  standardPrice  Decimal  @default(0) @db.Decimal(18, 2)
+  costPrice      Decimal  @default(0) @db.Decimal(18, 2)
+  trackInventory Boolean  @default(true)
+  taxable        Boolean  @default(true)
+  active         Boolean  @default(true)
+  description    String?
+  memo           String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
-  company            Company             @relation(fields: [companyId], references: [id])
-  category           ProductCategory?    @relation(fields: [categoryId], references: [id])
-  inventoryBalances  InventoryBalance[]
-  inventoryMovements InventoryMovement[]
-  salesOrderItems    SalesOrderItem[]
-  invoiceItems       InvoiceItem[]
-  serviceCases       ServiceCase[]
+  company           Company            @relation(fields: [companyId], references: [id])
+  category          ItemCategory?      @relation(fields: [categoryId], references: [id])
+  outputBom         Bom?
+  bomComponents     BomComponent[]     @relation("BomComponentItem")
+  inventoryBalances InventoryBalance[]
+  inventoryEntries  InventoryEntry[]
+  salesOrderItems   SalesOrderItem[]
+  invoiceItems      InvoiceItem[]
+  serviceCases      ServiceCase[]
 
   @@unique([companyId, code])
   @@index([companyId, name])
+  @@index([companyId, active, itemType])
+  @@map("items")
+}
+
+model Bom {
+  id           String   @id @default(cuid())
+  companyId    String
+  outputItemId String   @unique
+  code         String
+  name         String
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  company    Company      @relation(fields: [companyId], references: [id])
+  outputItem Item         @relation(fields: [outputItemId], references: [id])
+  versions   BomVersion[]
+
+  @@unique([companyId, code])
+  @@index([companyId, active])
+  @@map("boms")
+}
+
+model BomVersion {
+  id          String           @id @default(cuid())
+  bomId       String
+  revision    Int
+  status      BomVersionStatus @default(DRAFT)
+  notes       String?
+  activatedAt DateTime?
+  retiredAt   DateTime?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  bom                   Bom                    @relation(fields: [bomId], references: [id])
+  components            BomComponent[]         @relation("BomVersionComponents")
+  pinnedByComponents    BomComponent[]         @relation("PinnedChildBomVersion")
+  inventoryTransactions InventoryTransaction[]
+
+  @@unique([bomId, revision])
+  @@index([bomId, status])
+  @@map("bom_versions")
+}
+
+model BomComponent {
+  id                String   @id @default(cuid())
+  bomVersionId      String
+  componentItemId   String
+  childBomVersionId String?
+  quantity          Decimal  @db.Decimal(18, 6)
+  sortOrder         Int      @default(0)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  bomVersion      BomVersion  @relation("BomVersionComponents", fields: [bomVersionId], references: [id], onDelete: Cascade)
+  componentItem   Item        @relation("BomComponentItem", fields: [componentItemId], references: [id])
+  childBomVersion BomVersion? @relation("PinnedChildBomVersion", fields: [childBomVersionId], references: [id])
+
+  @@unique([bomVersionId, componentItemId])
+  @@index([childBomVersionId])
+  @@map("bom_components")
 }
 
 model Warehouse {
-  id        String  @id @default(cuid())
+  id        String   @id @default(cuid())
   companyId String
   code      String
   name      String
   location  String?
-  active    Boolean @default(true)
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  company            Company             @relation(fields: [companyId], references: [id])
-  inventoryBalances  InventoryBalance[]
-  inventoryMovements InventoryMovement[]
+  company           Company            @relation(fields: [companyId], references: [id])
+  inventoryBalances InventoryBalance[]
+  inventoryEntries  InventoryEntry[]
 
   @@unique([companyId, code])
+  @@index([companyId, active])
+  @@map("warehouses")
 }
 
 model InventoryBalance {
   id             String   @id @default(cuid())
   companyId      String
-  productId      String
+  itemId         String
   warehouseId    String
-  quantity       Int      @default(0)
-  safetyQuantity Int      @default(0)
+  quantity       Decimal  @default(0) @db.Decimal(18, 6)
+  safetyQuantity Decimal  @default(0) @db.Decimal(18, 6)
+  createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
   company   Company   @relation(fields: [companyId], references: [id])
-  product   Product   @relation(fields: [productId], references: [id])
+  item      Item      @relation(fields: [itemId], references: [id])
   warehouse Warehouse @relation(fields: [warehouseId], references: [id])
 
-  @@unique([companyId, productId, warehouseId])
+  @@unique([companyId, itemId, warehouseId])
+  @@index([companyId, warehouseId, itemId])
+  @@map("inventory_balances")
 }
 
-model InventoryMovement {
-  id           String   @id @default(cuid())
-  companyId    String
-  productId    String
-  warehouseId  String
-  movementType String
-  quantity     Int
-  movementAt   DateTime
-  reason       String?
-  memo         String?
-  createdAt    DateTime @default(now())
+model InventoryTransaction {
+  id              String                   @id @default(cuid())
+  companyId       String
+  transactionType InventoryTransactionType
+  idempotencyKey  String
+  payloadHash     String                   @db.Char(64)
+  occurredAt      DateTime
+  reference       String?
+  memo            String?
+  createdById     String?
+  bomVersionId    String?
+  reversalOfId    String?                  @unique
+  createdAt       DateTime                 @default(now())
 
-  company   Company   @relation(fields: [companyId], references: [id])
-  product   Product   @relation(fields: [productId], references: [id])
-  warehouse Warehouse @relation(fields: [warehouseId], references: [id])
+  company    Company               @relation(fields: [companyId], references: [id])
+  createdBy  User?                 @relation("InventoryTransactionCreator", fields: [createdById], references: [id])
+  bomVersion BomVersion?           @relation(fields: [bomVersionId], references: [id])
+  reversalOf InventoryTransaction? @relation("InventoryReversal", fields: [reversalOfId], references: [id])
+  reversal   InventoryTransaction? @relation("InventoryReversal")
+  entries    InventoryEntry[]
 
-  @@index([companyId, movementAt])
+  @@unique([companyId, idempotencyKey])
+  @@index([companyId, occurredAt])
+  @@map("inventory_transactions")
+}
+
+model InventoryEntry {
+  id            String   @id @default(cuid())
+  companyId     String
+  transactionId String
+  lineNumber    Int
+  itemId        String
+  warehouseId   String
+  quantity      Decimal  @db.Decimal(18, 6)
+  createdAt     DateTime @default(now())
+
+  company     Company              @relation(fields: [companyId], references: [id])
+  transaction InventoryTransaction @relation(fields: [transactionId], references: [id])
+  item        Item                 @relation(fields: [itemId], references: [id])
+  warehouse   Warehouse            @relation(fields: [warehouseId], references: [id])
+
+  @@unique([transactionId, lineNumber])
+  @@index([companyId, warehouseId, itemId])
+  @@map("inventory_entries")
 }
 
 model SalesOrder {
@@ -305,9 +447,9 @@ model SalesOrder {
   salesEmployeeId String?
   status          String   @default("confirmed")
   orderDate       DateTime
-  supplyAmount    Int      @default(0)
-  taxAmount       Int      @default(0)
-  totalAmount     Int      @default(0)
+  supplyAmount    Decimal  @default(0) @db.Decimal(18, 2)
+  taxAmount       Decimal  @default(0) @db.Decimal(18, 2)
+  totalAmount     Decimal  @default(0) @db.Decimal(18, 2)
   memo            String?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
@@ -320,21 +462,24 @@ model SalesOrder {
 
   @@unique([companyId, orderNo])
   @@index([companyId, orderDate])
+  @@map("sales_orders")
 }
 
 model SalesOrderItem {
   id           String  @id @default(cuid())
   salesOrderId String
-  productId    String?
-  productName  String
-  quantity     Int
-  unitPrice    Int
-  supplyAmount Int
-  taxAmount    Int
-  totalAmount  Int
+  itemId       String?
+  itemName     String
+  quantity     Decimal @db.Decimal(18, 6)
+  unitPrice    Decimal @db.Decimal(18, 2)
+  supplyAmount Decimal @db.Decimal(18, 2)
+  taxAmount    Decimal @db.Decimal(18, 2)
+  totalAmount  Decimal @db.Decimal(18, 2)
 
   salesOrder SalesOrder @relation(fields: [salesOrderId], references: [id], onDelete: Cascade)
-  product    Product?   @relation(fields: [productId], references: [id])
+  item       Item?      @relation(fields: [itemId], references: [id])
+
+  @@map("sales_order_items")
 }
 
 model Invoice {
@@ -346,11 +491,11 @@ model Invoice {
   issueDate       DateTime
   dueDate         DateTime?
   status          String    @default("issued")
-  supplyAmount    Int       @default(0)
-  taxAmount       Int       @default(0)
-  totalAmount     Int       @default(0)
-  paidAmount      Int       @default(0)
-  remainingAmount Int       @default(0)
+  supplyAmount    Decimal   @default(0) @db.Decimal(18, 2)
+  taxAmount       Decimal   @default(0) @db.Decimal(18, 2)
+  totalAmount     Decimal   @default(0) @db.Decimal(18, 2)
+  paidAmount      Decimal   @default(0) @db.Decimal(18, 2)
+  remainingAmount Decimal   @default(0) @db.Decimal(18, 2)
   memo            String?
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
@@ -363,33 +508,38 @@ model Invoice {
 
   @@unique([companyId, invoiceNo])
   @@index([companyId, issueDate])
+  @@map("invoices")
 }
 
 model InvoiceItem {
   id           String  @id @default(cuid())
   invoiceId    String
-  productId    String?
+  itemId       String?
   itemName     String
-  quantity     Int
-  unitPrice    Int
-  supplyAmount Int
-  taxAmount    Int
-  totalAmount  Int
+  quantity     Decimal @db.Decimal(18, 6)
+  unitPrice    Decimal @db.Decimal(18, 2)
+  supplyAmount Decimal @db.Decimal(18, 2)
+  taxAmount    Decimal @db.Decimal(18, 2)
+  totalAmount  Decimal @db.Decimal(18, 2)
 
-  invoice Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
-  product Product? @relation(fields: [productId], references: [id])
+  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  item    Item?   @relation(fields: [itemId], references: [id])
+
+  @@map("invoice_items")
 }
 
 model Payment {
   id        String   @id @default(cuid())
   invoiceId String
   paidAt    DateTime
-  amount    Int
+  amount    Decimal  @db.Decimal(18, 2)
   method    String
   memo      String?
   createdAt DateTime @default(now())
 
   invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@map("payments")
 }
 
 model Consultation {
@@ -407,13 +557,14 @@ model Consultation {
   customer Customer? @relation(fields: [customerId], references: [id])
 
   @@index([companyId, status])
+  @@map("consultations")
 }
 
 model ServiceCase {
   id          String    @id @default(cuid())
   companyId   String
   customerId  String?
-  productId   String?
+  itemId      String?
   status      String    @default("received")
   symptom     String
   result      String?
@@ -424,7 +575,8 @@ model ServiceCase {
 
   company  Company   @relation(fields: [companyId], references: [id])
   customer Customer? @relation(fields: [customerId], references: [id])
-  product  Product?  @relation(fields: [productId], references: [id])
+  item     Item?     @relation(fields: [itemId], references: [id])
 
   @@index([companyId, status])
+  @@map("service_cases")
 }

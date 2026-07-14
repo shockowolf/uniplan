@@ -1,23 +1,35 @@
-import { demoCompanyId } from '@/lib/db';
 import { mergeEntityParams, resolveEntities } from '@/lib/ai/entities';
-import { getIntentClassifier, templateFromClassification } from '@/lib/ai/intent';
+import {
+  getIntentClassifier,
+  templateFromClassification,
+} from '@/lib/ai/intent';
 import { fallbackResult } from '@/lib/templates/registry';
 import { ChatResult } from '@/lib/templates/types';
 
 export type { ChatResult };
 
-export async function answerQuestion(message: string, companyId = demoCompanyId): Promise<ChatResult> {
-  const classifier = getIntentClassifier();
-  const classification = await classifier.classify(message);
-  const template = templateFromClassification(classification);
+export async function answerQuestion(
+  message: string,
+  companyId: string,
+): Promise<ChatResult> {
+  const intentClassifier = getIntentClassifier();
+  const intentClassification = await intentClassifier.classify(message);
+  const selectedQueryTemplate =
+    templateFromClassification(intentClassification);
 
-  if (!template) return fallbackResult();
+  if (!selectedQueryTemplate) return fallbackResult();
 
-  const entities = await resolveEntities(message, companyId);
-  const params = mergeEntityParams(classification.params, entities);
-  const result = await template.run({ companyId, params });
+  const resolvedEntities = await resolveEntities(message, companyId);
+  const mergedTemplateParameters = mergeEntityParams(
+    intentClassification.params,
+    resolvedEntities,
+  );
+  const templateResult = await selectedQueryTemplate.run({
+    companyId,
+    params: mergedTemplateParameters,
+  });
   return {
-    ...result,
-    message: result.message
+    ...templateResult,
+    message: templateResult.message,
   };
 }

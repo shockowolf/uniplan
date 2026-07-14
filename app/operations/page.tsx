@@ -1,17 +1,31 @@
 import { ModulePage } from '@/components/ModulePage';
-import { UniErpAdminPage } from '@/components/UniErpAdminPage';
-import { findUniErpMenuItem, getUniErpModule } from '@/lib/uniErpBlueprint';
+import { UniplanReferencePage } from '@/components/UniplanReferencePage';
+import { findUniplanModuleItem, getUniplanModule } from '@/lib/uniplanModules';
 
 type OperationsPageProps = {
-  searchParams?: Promise<{ legacy?: string }>;
+  searchParams?: Promise<{ view?: string }>;
 };
 
-export default async function OperationsPage({ searchParams }: OperationsPageProps) {
-  const params = searchParams ? await searchParams : {};
-  const adminPage = findUniErpMenuItem('/operations', params.legacy);
-  const module = getUniErpModule('/operations');
+export default async function OperationsPage({
+  searchParams,
+}: OperationsPageProps) {
+  const searchParameters = searchParams ? await searchParams : {};
+  const selectedModuleItem = findUniplanModuleItem(
+    '/operations',
+    searchParameters.view,
+  );
+  const moduleDefinition = getUniplanModule('/operations');
 
-  if (adminPage) return <UniErpAdminPage page={adminPage} />;
+  if (selectedModuleItem)
+    return <UniplanReferencePage moduleItem={selectedModuleItem} />;
 
-  return <ModulePage description={module!.description} eyebrow={module!.eyebrow} metrics={module!.metrics} sections={module!.sections} title={module!.title} />;
+  return (
+    <ModulePage
+      description={moduleDefinition!.description}
+      eyebrow={moduleDefinition!.eyebrow}
+      metrics={moduleDefinition!.metrics}
+      sections={moduleDefinition!.sections}
+      title={moduleDefinition!.title}
+    />
+  );
 }

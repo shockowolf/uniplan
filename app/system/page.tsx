@@ -1,28 +1,40 @@
 import { ModulePage } from '@/components/ModulePage';
-import { UniErpAdminPage } from '@/components/UniErpAdminPage';
+import { UniplanReferencePage } from '@/components/UniplanReferencePage';
 import { UniChartDashboard } from '@/components/system/UniChartDashboard';
 import { UserManagementDetail } from '@/components/system/UserManagementDetail';
-import { findUniErpMenuItem, getUniErpModule } from '@/lib/uniErpBlueprint';
+import { findUniplanModuleItem, getUniplanModule } from '@/lib/uniplanModules';
 
 type SystemPageProps = {
-  searchParams?: Promise<{ legacy?: string }>;
+  searchParams?: Promise<{ view?: string }>;
 };
 
 export default async function SystemPage({ searchParams }: SystemPageProps) {
-  const params = searchParams ? await searchParams : {};
+  const searchParameters = searchParams ? await searchParams : {};
 
-  if (params.legacy === 'LM002') {
+  if (searchParameters.view === 'settings-users') {
     return <UserManagementDetail />;
   }
 
-  if (params.legacy === 'LM009') {
+  if (searchParameters.view === 'settings-charts') {
     return <UniChartDashboard />;
   }
 
-  const adminPage = findUniErpMenuItem('/system', params.legacy);
-  const module = getUniErpModule('/system');
+  const selectedModuleItem = findUniplanModuleItem(
+    '/system',
+    searchParameters.view,
+  );
+  const moduleDefinition = getUniplanModule('/system');
 
-  if (adminPage) return <UniErpAdminPage page={adminPage} />;
+  if (selectedModuleItem)
+    return <UniplanReferencePage moduleItem={selectedModuleItem} />;
 
-  return <ModulePage description={module!.description} eyebrow={module!.eyebrow} metrics={module!.metrics} sections={module!.sections} title={module!.title} />;
+  return (
+    <ModulePage
+      description={moduleDefinition!.description}
+      eyebrow={moduleDefinition!.eyebrow}
+      metrics={moduleDefinition!.metrics}
+      sections={moduleDefinition!.sections}
+      title={moduleDefinition!.title}
+    />
+  );
 }

@@ -1,101 +1,119 @@
-import { demoCompanyId, prisma } from '@/lib/db';
-import { uniErpModules } from '@/lib/uniErpBlueprint';
+import type { PrismaClient } from '@prisma/client';
+import { prisma } from '@/lib/db';
 
 export type SidebarMenuItem = {
+  code: string;
   label: string;
   href: string;
   children?: SidebarMenuItem[];
 };
 
-export const fallbackSidebarMenuItems: SidebarMenuItem[] = [
-  ...uniErpModules.map((module) => ({
-    label: module.label,
-    href: module.href,
-    children: module.children.map((item) => ({
-      label: item.label,
-      href: item.href
-    }))
-  }))
-];
+type VisibleMenuRow = {
+  id: string;
+  parentId: string | null;
+  code: string;
+  label: string;
+  href: string | null;
+  sortOrder: number;
+};
 
-export async function getSidebarMenuItems(companyId = demoCompanyId, roleCode = 'admin'): Promise<SidebarMenuItem[]> {
+export function isInternalMenuHref(href: string | null): href is string {
+  return Boolean(
+    href &&
+    href.startsWith('/') &&
+    !href.startsWith('//') &&
+    !href.includes('://') &&
+    !/\s/.test(href),
+  );
+}
+
+export function buildMenuTree(
+  menuRecords: VisibleMenuRow[],
+): SidebarMenuItem[] {
+  const validMenuRecords = menuRecords.filter((menuRecord) =>
+    isInternalMenuHref(menuRecord.href),
+  );
+  const menuRecordsByParentId = new Map<string | null, VisibleMenuRow[]>();
+  for (const menuRecord of validMenuRecords) {
+    const siblingMenuRecords =
+      menuRecordsByParentId.get(menuRecord.parentId) ?? [];
+    siblingMenuRecords.push(menuRecord);
+    menuRecordsByParentId.set(menuRecord.parentId, siblingMenuRecords);
+  }
+
+  const compareMenuRecords = (left: VisibleMenuRow, right: VisibleMenuRow) =>
+    left.sortOrder - right.sortOrder ||
+    left.label.localeCompare(right.label) ||
+    left.code.localeCompare(right.code);
+
+  const buildChildMenuItems = (
+    parentId: string | null,
+    ancestorMenuIds: ReadonlySet<string>,
+  ): SidebarMenuItem[] =>
+    (menuRecordsByParentId.get(parentId) ?? [])
+      .sort(compareMenuRecords)
+      .filter((menuRecord) => !ancestorMenuIds.has(menuRecord.id))
+      .map((menuRecord) => {
+        const descendantAncestorMenuIds = new Set(ancestorMenuIds).add(
+          menuRecord.id,
+        );
+        const childMenuItems = buildChildMenuItems(
+          menuRecord.id,
+          descendantAncestorMenuIds,
+        );
+        return {
+          code: menuRecord.code,
+          label: menuRecord.label,
+          href: menuRecord.href as string,
+          ...(childMenuItems.length > 0 ? { children: childMenuItems } : {}),
+        };
+      });
+
+  return buildChildMenuItems(null, new Set());
+}
+
+export async function getAuthorizedMenuTree(
+  companyId: string,
+  userId: string,
+  databaseClient: PrismaClient = prisma,
+): Promise<SidebarMenuItem[]> {
   try {
-    const role = await prisma.role.findFirst({
-      where: {
-        companyId,
-        code: roleCode,
-        active: true
-      },
-      select: { id: true }
-    });
-
-    const menuNodes = await prisma.menuNode.findMany({
+    const authorizedMenuRecords = await databaseClient.menuItem.findMany({
       where: {
         companyId,
         active: true,
-        parentId: null,
-        ...(role
-          ? {
-              permissions: {
-                some: {
-                  roleId: role.id,
-                  canRead: true
-                }
-              }
-            }
-          : {})
-      },
-      include: {
-        menu: {
-          select: {
-            href: true,
-            active: true
-          }
+        permissions: {
+          some: {
+            canRead: true,
+            role: {
+              companyId,
+              active: true,
+              userRoles: {
+                some: { userId, user: { companyId, status: 'active' } },
+              },
+            },
+          },
         },
-        children: {
-          where: {
-            active: true,
-            ...(role
-              ? {
-                  permissions: {
-                    some: {
-                      roleId: role.id,
-                      canRead: true
-                    }
-                  }
-                }
-              : {})
-          },
-          include: {
-            menu: {
-              select: {
-                href: true,
-                active: true
-              }
-            }
-          },
-          orderBy: [{ sortOrder: 'asc' }, { label: 'asc' }]
-        }
       },
-      orderBy: [{ sortOrder: 'asc' }, { label: 'asc' }]
+      select: {
+        id: true,
+        parentId: true,
+        code: true,
+        label: true,
+        href: true,
+        sortOrder: true,
+      },
     });
-
-    const items = menuNodes
-      .filter((node) => node.menu?.active ?? true)
-      .map((node) => ({
-        label: node.label,
-        href: node.href ?? node.menu?.href ?? '/',
-        children: node.children
-          .filter((child) => child.menu?.active ?? true)
-          .map((child) => ({
-            label: child.label,
-            href: child.href ?? child.menu?.href ?? '/'
-          }))
-      }));
-
-    return items.length > 0 ? items : fallbackSidebarMenuItems;
-  } catch (error) {
-    console.warn('Falling back to static sidebar menu:', error);
-    return fallbackSidebarMenuItems;
+    return buildMenuTree(authorizedMenuRecords);
+  } catch {
+    return [];
   }
+}
+
+export async function getSidebarMenuItems(
+  companyId: string,
+  userId: string,
+  databaseClient: PrismaClient = prisma,
+): Promise<SidebarMenuItem[]> {
+  return getAuthorizedMenuTree(companyId, userId, databaseClient);
 }

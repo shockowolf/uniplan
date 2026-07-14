@@ -10,8 +10,8 @@ This repository now contains both:
 ## Current Scope
 
 - Next.js dashboard and chat UI
-- Prisma + SQLite local demo DB
-- PostgreSQL migration prep
+- Prisma + PostgreSQL 16 local demo DB
+- Versioned Prisma migration history
 - Seed demo data
 - `/api/chat` template-based responses
 - `/api/dashboard` and `/api/templates`
@@ -24,6 +24,8 @@ This repository now contains both:
 
 ```bash
 npm install
+cp .env.postgres.example .env
+docker compose -f docker-compose.postgres.yml up -d
 npm run db:reset
 npm run dev
 ```
@@ -32,6 +34,7 @@ npm run dev
 
 ```bash
 npm run typecheck
+npm test
 npm run build
 ```
 
@@ -43,22 +46,27 @@ npm run build
 4. 재고 부족한 품목
 5. 상담 지연 건
 
-## PostgreSQL Prep
+## PostgreSQL
 
-SQLite is the default local demo DB. PostgreSQL transition files are prepared:
+`prisma/schema.prisma` is the only canonical schema. The dedicated local service listens only on `127.0.0.1:5433`:
 
 ```bash
-npm run db:use:postgres
-# start PostgreSQL, then:
+cp .env.postgres.example .env
+docker compose -f docker-compose.postgres.yml up -d
 npm run db:reset
 ```
 
-Return to SQLite:
+Use `npm run db:migrate` for non-destructive migration deployment. `npm run db:reset` is reserved for disposable local/test data.
+
+## Invite-only authentication
+
+There is no public signup. After an operator creates an invited company user, set or reset that user's password from an interactive terminal:
 
 ```bash
-npm run db:use:sqlite
-npm run db:reset
+npm run auth:set-password -- --company COMPANY_CODE --email user@example.com
 ```
+
+The command reads the password without echoing it and revokes the user's existing sessions. Session duration is configured with `UNIPLAN_AUTH_SESSION_TTL_SECONDS` (default 8 hours, maximum 30 days), and production deployments should set `UNIPLAN_APP_ORIGIN` to the public application origin. Legacy demo authorization is opt-in for local development with `UNIPLAN_DEMO_AUTH_ENABLED=true` and is always disabled when `NODE_ENV=production`.
 
 ## Start Here
 

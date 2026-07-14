@@ -4,7 +4,7 @@ export type Customer = {
   grade: 'A' | 'B' | 'C';
 };
 
-export type Product = {
+export type Item = {
   id: string;
   name: string;
   category: string;
@@ -34,7 +34,7 @@ export type Consultation = {
 export type ServiceCase = {
   id: string;
   customerId: string;
-  productId: string;
+  itemId: string;
   status: 'received' | 'in_progress' | 'done' | 'delayed';
   symptom: string;
   receivedAt: string;
@@ -49,12 +49,12 @@ export const customers: Customer[] = [
   { id: 'c-005', name: '다산메디', grade: 'B' }
 ];
 
-export const products: Product[] = [
-  { id: 'p-001', name: 'ERP Basic 월구독', category: 'SaaS', safetyQuantity: 0, quantity: 999 },
-  { id: 'p-002', name: '재고관리 모듈', category: 'Module', safetyQuantity: 0, quantity: 999 },
-  { id: 'p-003', name: 'QR 주문 태블릿', category: 'Device', safetyQuantity: 10, quantity: 6 },
-  { id: 'p-004', name: '바코드 스캐너', category: 'Device', safetyQuantity: 8, quantity: 12 },
-  { id: 'p-005', name: '현장 설치 지원', category: 'Service', safetyQuantity: 0, quantity: 999 }
+export const items: Item[] = [
+  { id: 'item-001', name: 'ERP Basic 월구독', category: 'SaaS', safetyQuantity: 0, quantity: 999 },
+  { id: 'item-002', name: '재고관리 모듈', category: 'Module', safetyQuantity: 0, quantity: 999 },
+  { id: 'item-003', name: 'QR 주문 태블릿', category: 'Device', safetyQuantity: 10, quantity: 6 },
+  { id: 'item-004', name: '바코드 스캐너', category: 'Device', safetyQuantity: 8, quantity: 12 },
+  { id: 'item-005', name: '현장 설치 지원', category: 'Service', safetyQuantity: 0, quantity: 999 }
 ];
 
 export const invoices: Invoice[] = [
@@ -73,14 +73,14 @@ export const consultations: Consultation[] = [
 ];
 
 export const serviceCases: ServiceCase[] = [
-  { id: 'as-001', customerId: 'c-003', productId: 'p-003', status: 'delayed', symptom: 'QR 주문 태블릿 충전 불량', receivedAt: '2026-04-27', dueAt: '2026-05-01' },
-  { id: 'as-002', customerId: 'c-005', productId: 'p-004', status: 'in_progress', symptom: '스캐너 인식률 저하', receivedAt: '2026-05-01', dueAt: '2026-05-04' }
+  { id: 'as-001', customerId: 'c-003', itemId: 'item-003', status: 'delayed', symptom: 'QR 주문 태블릿 충전 불량', receivedAt: '2026-04-27', dueAt: '2026-05-01' },
+  { id: 'as-002', customerId: 'c-005', itemId: 'item-004', status: 'in_progress', symptom: '스캐너 인식률 저하', receivedAt: '2026-05-01', dueAt: '2026-05-04' }
 ];
 
 export function customerName(id: string) {
   return customers.find((customer) => customer.id === id)?.name ?? '알 수 없음';
 }
 
-export function productName(id: string) {
-  return products.find((product) => product.id === id)?.name ?? '알 수 없음';
+export function itemName(id: string) {
+  return items.find((item) => item.id === id)?.name ?? '알 수 없음';
 }

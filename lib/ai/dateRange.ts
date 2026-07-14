@@ -11,7 +11,9 @@ function startOfMonth(date: Date) {
 }
 
 function addMonths(date: Date, months: number) {
-  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + months, 1));
+  return new Date(
+    Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + months, 1),
+  );
 }
 
 function startOfYear(date: Date) {
@@ -19,9 +21,9 @@ function startOfYear(date: Date) {
 }
 
 function addDays(date: Date, days: number) {
-  const next = new Date(date);
-  next.setUTCDate(next.getUTCDate() + days);
-  return next;
+  const shiftedDate = new Date(date);
+  shiftedDate.setUTCDate(shiftedDate.getUTCDate() + days);
+  return shiftedDate;
 }
 
 export function parseDateRange(message: string, now = demoToday): DateRange {
@@ -32,7 +34,7 @@ export function parseDateRange(message: string, now = demoToday): DateRange {
     return {
       label: '지난달',
       from: addMonths(thisMonth, -1),
-      to: thisMonth
+      to: thisMonth,
     };
   }
 
@@ -40,15 +42,19 @@ export function parseDateRange(message: string, now = demoToday): DateRange {
     return {
       label: '최근 30일',
       from: addDays(now, -29),
-      to: addDays(now, 1)
+      to: addDays(now, 1),
     };
   }
 
-  if (normalized.includes('최근7일') || normalized.includes('일주일') || normalized.includes('1주일')) {
+  if (
+    normalized.includes('최근7일') ||
+    normalized.includes('일주일') ||
+    normalized.includes('1주일')
+  ) {
     return {
       label: '최근 7일',
       from: addDays(now, -6),
-      to: addDays(now, 1)
+      to: addDays(now, 1),
     };
   }
 
@@ -56,7 +62,7 @@ export function parseDateRange(message: string, now = demoToday): DateRange {
     return {
       label: '올해',
       from: startOfYear(now),
-      to: addDays(now, 1)
+      to: addDays(now, 1),
     };
   }
 
@@ -64,14 +70,14 @@ export function parseDateRange(message: string, now = demoToday): DateRange {
     return {
       label: '오늘',
       from: now,
-      to: addDays(now, 1)
+      to: addDays(now, 1),
     };
   }
 
   return {
     label: '이번 달',
     from: startOfMonth(now),
-    to: addMonths(startOfMonth(now), 1)
+    to: addMonths(startOfMonth(now), 1),
   };
 }
 
@@ -79,13 +85,16 @@ export function serializeDateRange(range: DateRange) {
   return {
     label: range.label,
     dateFrom: range.from.toISOString(),
-    dateTo: range.to.toISOString()
+    dateTo: range.to.toISOString(),
   };
 }
 
-export function deserializeDateRange(params?: Record<string, string | number | boolean | null>): DateRange | null {
+export function deserializeDateRange(
+  params?: Record<string, string | number | boolean | null>,
+): DateRange | null {
   const label = typeof params?.dateLabel === 'string' ? params.dateLabel : null;
-  const dateFrom = typeof params?.dateFrom === 'string' ? params.dateFrom : null;
+  const dateFrom =
+    typeof params?.dateFrom === 'string' ? params.dateFrom : null;
   const dateTo = typeof params?.dateTo === 'string' ? params.dateTo : null;
   if (!label || !dateFrom || !dateTo) return null;
   return { label, from: new Date(dateFrom), to: new Date(dateTo) };

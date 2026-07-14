@@ -117,7 +117,7 @@ export const uniChartGroups: UniChartGroup[] = [
     charts: [
       {
         kind: 'stacked-area',
-        title: '월별 상품 매출액',
+        title: '월별 품목 매출액',
         xKey: 'contractDt',
         yKey: 'sum01',
         valueFormat: 'money',
@@ -126,7 +126,7 @@ export const uniChartGroups: UniChartGroup[] = [
       },
       {
         kind: 'stacked-bar',
-        title: '월별 상품 판매수량',
+        title: '월별 품목 판매수량',
         xKey: 'contractDt',
         yKey: 'cnt01',
         valueFormat: 'count',
@@ -135,7 +135,7 @@ export const uniChartGroups: UniChartGroup[] = [
       },
       {
         kind: 'stacked-area',
-        title: '지역별 상품 매출액',
+        title: '지역별 품목 매출액',
         xKey: 'areaCd',
         yKey: 'sum01',
         valueFormat: 'money',
@@ -144,7 +144,7 @@ export const uniChartGroups: UniChartGroup[] = [
       },
       {
         kind: 'stacked-bar',
-        title: '지역별 상품 판매수량',
+        title: '지역별 품목 판매수량',
         xKey: 'areaCd',
         yKey: 'cnt01',
         valueFormat: 'count',

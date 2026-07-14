@@ -16,13 +16,10 @@ Primary check:
 npm run verify:cloud
 ```
 
-`npm install` runs `postinstall`, which creates the ignored local `.env`, points
-Prisma at SQLite, creates or updates the demo database, and seeds the data used
-by `/api/chat`. It avoids
-`prisma db push --force-reset` because Codex Cloud/Prisma safety checks block
-destructive database reset commands.
+`npm install` runs a non-destructive Prisma client generation step. It does not
+create, reset, or seed a database.
 
-Manual equivalent:
+Manual equivalent for client generation:
 
 ```bash
 npm run setup:cloud
@@ -33,17 +30,16 @@ npm run setup:cloud
 Local development:
 
 ```bash
-npm run db:use:sqlite
+cp .env.postgres.example .env
+docker compose -f docker-compose.postgres.yml up -d
 npm run db:reset
 npm run dev
 ```
 
-PostgreSQL prep:
+Non-destructive migration deployment:
 
 ```bash
-npm run db:use:postgres
-docker compose -f docker-compose.postgres.yml up -d
-npm run db:reset
+npm run db:migrate
 ```
 
 ## Security
@@ -55,6 +51,6 @@ Do not commit:
 - private customer data
 - raw database dumps
 - generated archive bundles
-- Prisma local SQLite DB files
+- local database volumes or dumps
 
 The AI query path must remain template-based and read-only for the MVP.

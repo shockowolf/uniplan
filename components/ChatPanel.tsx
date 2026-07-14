@@ -15,9 +15,15 @@ type ChatResult = {
   suggestions: string[];
 };
 
-export function ChatPanel({ initialQuestion, initialResult }: { initialQuestion: string; initialResult: ChatResult }) {
+export function ChatPanel({
+  initialQuestion,
+  initialResult,
+}: {
+  initialQuestion: string;
+  initialResult: ChatResult;
+}) {
   const [input, setInput] = useState('');
-  const [result, setResult] = useState<ChatResult>(initialResult);
+  const [chatResult, setChatResult] = useState<ChatResult>(initialResult);
   const [loading, setLoading] = useState(false);
   const [lastQuestion, setLastQuestion] = useState(initialQuestion);
 
@@ -27,9 +33,9 @@ export function ChatPanel({ initialQuestion, initialResult }: { initialQuestion:
     const response = await fetch('/api/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message })
+      body: JSON.stringify({ message }),
     });
-    setResult((await response.json()) as ChatResult);
+    setChatResult((await response.json()) as ChatResult);
     setLoading(false);
     setInput('');
   }
@@ -50,35 +56,51 @@ export function ChatPanel({ initialQuestion, initialResult }: { initialQuestion:
         <div className="status-pill">Read-only · Template Safe</div>
       </header>
 
-      <MetricCards metrics={result.metrics} />
+      <MetricCards metrics={chatResult.metrics} />
 
       <section className="content-grid">
         <section className="insight-panel">
           <div className="panel-head">
             <div>
               <p className="eyebrow">AI Insight</p>
-              <h2>{loading ? '분석 중...' : result.templateId}</h2>
+              <h2>{loading ? '분석 중...' : chatResult.templateId}</h2>
             </div>
             <span>{lastQuestion}</span>
           </div>
-          <p className="answer-text">{loading ? '데이터를 조회하고 요약하는 중입니다.' : result.message}</p>
-          <ChartView chart={result.chart} />
-          <DataGrid grid={result.grid} />
+          <p className="answer-text">
+            {loading
+              ? '데이터를 조회하고 요약하는 중입니다.'
+              : chatResult.message}
+          </p>
+          <ChartView chart={chatResult.chart} />
+          <DataGrid grid={chatResult.grid} />
         </section>
 
         <aside className="ai-panel">
           <p className="eyebrow">Ask UniPlan</p>
           <h2>AI 분석 명령실</h2>
-          <p className="ai-copy">매출, 미수금, 재고, 상담/AS 현황을 안전한 템플릿으로 조회합니다.</p>
+          <p className="ai-copy">
+            매출, 미수금, 재고, 상담/AS 현황을 안전한 템플릿으로 조회합니다.
+          </p>
 
           <form className="chat-input" onSubmit={onSubmit}>
-            <textarea value={input} onChange={(event) => setInput(event.target.value)} placeholder="예: 이번 달 매출 어때?" />
-            <button disabled={loading} type="submit">질문하기</button>
+            <textarea
+              value={input}
+              onChange={(event) => setInput(event.target.value)}
+              placeholder="예: 이번 달 매출 어때?"
+            />
+            <button disabled={loading} type="submit">
+              질문하기
+            </button>
           </form>
 
           <div className="suggestions compact">
-            {result.suggestions.map((suggestion) => (
-              <button key={suggestion} onClick={() => ask(suggestion)} type="button">
+            {chatResult.suggestions.map((suggestion) => (
+              <button
+                key={suggestion}
+                onClick={() => ask(suggestion)}
+                type="button"
+              >
                 {suggestion}
               </button>
             ))}

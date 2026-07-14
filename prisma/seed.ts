@@ -1,450 +1,715 @@
-import { PrismaClient } from '@prisma/client';
-import { uniErpModules } from '../lib/uniErpBlueprint';
+import { BomVersionStatus, ItemType, PrismaClient } from '@prisma/client';
+import {
+  activateBomRevision,
+  replaceDraftBomComponents,
+} from '../lib/domain/boms';
+import { postInventoryTransaction } from '../lib/domain/inventory';
 
 const prisma = new PrismaClient();
 const companyId = 'demo-company';
+const atUtcMidnight = (calendarDate: string) =>
+  new Date(`${calendarDate}T00:00:00.000Z`);
 
-const date = (value: string) => new Date(`${value}T00:00:00.000Z`);
+const menuDefinitions = [
+  {
+    code: 'dashboard',
+    label: '대시보드',
+    href: '/',
+    resourceCode: 'dashboard.analytics',
+    sortOrder: 10,
+  },
+  {
+    code: 'sales',
+    label: '영업',
+    href: '/sales',
+    resourceCode: 'sales.read',
+    sortOrder: 20,
+  },
+  {
+    code: 'customers',
+    label: '고객',
+    href: '/customers',
+    resourceCode: 'customers.read',
+    sortOrder: 30,
+  },
+  {
+    code: 'inventory',
+    label: '재고',
+    href: '/inventory',
+    resourceCode: 'inventory.read',
+    sortOrder: 40,
+  },
+  {
+    code: 'inventory-items',
+    label: '품목',
+    href: '/inventory/items',
+    resourceCode: 'inventory.items',
+    sortOrder: 10,
+    parentCode: 'inventory',
+  },
+  {
+    code: 'inventory-boms',
+    label: 'BOM',
+    href: '/inventory/boms',
+    resourceCode: 'inventory.boms',
+    sortOrder: 20,
+    parentCode: 'inventory',
+  },
+  {
+    code: 'inventory-warehouses',
+    label: '창고',
+    href: '/inventory/warehouses',
+    resourceCode: 'inventory.warehouses',
+    sortOrder: 30,
+    parentCode: 'inventory',
+  },
+  {
+    code: 'inventory-stock',
+    label: '현재고',
+    href: '/inventory/stock',
+    resourceCode: 'inventory.stock',
+    sortOrder: 40,
+    parentCode: 'inventory',
+  },
+  {
+    code: 'inventory-movements',
+    label: '재고 거래',
+    href: '/inventory/movements',
+    resourceCode: 'inventory.movements',
+    sortOrder: 50,
+    parentCode: 'inventory',
+  },
+  {
+    code: 'finance',
+    label: '재무',
+    href: '/finance',
+    resourceCode: 'finance.read',
+    sortOrder: 50,
+  },
+  {
+    code: 'operations',
+    label: '운영',
+    href: '/operations',
+    resourceCode: 'operations.read',
+    sortOrder: 60,
+  },
+  {
+    code: 'settings',
+    label: '설정',
+    href: '/system',
+    resourceCode: 'settings.read',
+    sortOrder: 70,
+  },
+  {
+    code: 'settings-navigation',
+    label: '메뉴 관리',
+    href: '/settings/navigation',
+    resourceCode: 'settings.navigation',
+    sortOrder: 10,
+    parentCode: 'settings',
+  },
+] as const;
 
-async function main() {
+async function seedDemoIdentityAndPermissions() {
   await prisma.company.upsert({
     where: { id: companyId },
-    update: {},
-    create: {
-      id: companyId,
-      code: 'DEMO',
-      name: '테크아틀리에 데모'
-    }
+    update: { name: '테크아틀리에 데모' },
+    create: { id: companyId, code: 'DEMO', name: '테크아틀리에 데모' },
   });
-
-  const domain = await prisma.domain.upsert({
+  const erpDomain = await prisma.domain.upsert({
     where: { companyId_code: { companyId, code: 'ERP' } },
-    update: {
-      name: 'UniPlan ERP',
-      domainName: 'uniplan.local',
-      domainType: 'ERP',
-      active: true
-    },
+    update: { name: 'UNIPLAN ERP', domainName: 'uniplan.local', active: true },
     create: {
       companyId,
       code: 'ERP',
-      name: 'UniPlan ERP',
+      name: 'UNIPLAN ERP',
       domainName: 'uniplan.local',
-      domainType: 'ERP'
-    }
-  });
-
-  const adminRole = await prisma.role.upsert({
-    where: { companyId_code: { companyId, code: 'admin' } },
-    update: {
-      domainId: domain.id,
-      name: '관리자',
-      description: '전체 메뉴와 기능을 관리하는 역할',
-      active: true
     },
-    create: {
-      companyId,
-      domainId: domain.id,
-      code: 'admin',
-      name: '관리자',
-      description: '전체 메뉴와 기능을 관리하는 역할'
-    }
   });
-
-  const staffRole = await prisma.role.upsert({
-    where: { companyId_code: { companyId, code: 'staff' } },
-    update: {
-      domainId: domain.id,
-      name: '사용자',
-      description: 'ERP 주요 메뉴를 조회하는 일반 사용자 역할',
-      active: true
-    },
-    create: {
-      companyId,
-      domainId: domain.id,
-      code: 'staff',
-      name: '사용자',
-      description: 'ERP 주요 메뉴를 조회하는 일반 사용자 역할'
-    }
-  });
-
+  const [adminRole, staffRole] = await Promise.all([
+    prisma.role.upsert({
+      where: { companyId_code: { companyId, code: 'admin' } },
+      update: { domainId: erpDomain.id, name: '관리자', active: true },
+      create: {
+        companyId,
+        domainId: erpDomain.id,
+        code: 'admin',
+        name: '관리자',
+        description: 'UNIPLAN 전체 관리 역할',
+      },
+    }),
+    prisma.role.upsert({
+      where: { companyId_code: { companyId, code: 'staff' } },
+      update: { domainId: erpDomain.id, name: '사용자', active: true },
+      create: {
+        companyId,
+        domainId: erpDomain.id,
+        code: 'staff',
+        name: '사용자',
+        description: 'UNIPLAN 조회 역할',
+      },
+    }),
+  ]);
   const adminUser = await prisma.user.upsert({
     where: { companyId_email: { companyId, email: 'admin@uniplan.local' } },
-    update: { domainId: domain.id },
+    update: { domainId: erpDomain.id, name: '관리자', status: 'active' },
     create: {
       companyId,
-      domainId: domain.id,
+      domainId: erpDomain.id,
       email: 'admin@uniplan.local',
       passwordHash: 'demo-only',
-      name: '관리자'
-    }
+      name: '관리자',
+    },
   });
-
   await prisma.userRole.upsert({
     where: { userId_roleId: { userId: adminUser.id, roleId: adminRole.id } },
     update: {},
-    create: {
-      userId: adminUser.id,
-      roleId: adminRole.id
-    }
+    create: { userId: adminUser.id, roleId: adminRole.id },
   });
 
-  const navigationSeeds = uniErpModules.map((module) => ({
-    code: module.code,
-    label: module.label,
-    href: module.href,
-    sortOrder: module.sortOrder,
-    legacyMenuId: module.legacyMenuId,
-    legacyMapId: module.legacyMapId
-  }));
-
-  for (const seed of navigationSeeds) {
-    const menu = await prisma.menu.upsert({
-      where: { companyId_code: { companyId, code: seed.code } },
+  const menuItemIdByCode = new Map<string, string>();
+  for (const menuDefinition of menuDefinitions) {
+    const menuItem = await prisma.menuItem.upsert({
+      where: { companyId_code: { companyId, code: menuDefinition.code } },
       update: {
-        label: seed.label,
-        href: seed.href,
-        sortOrder: seed.sortOrder,
-        legacyMenuId: seed.legacyMenuId,
-        active: true
+        domainId: erpDomain.id,
+        parentId:
+          'parentCode' in menuDefinition
+            ? (menuItemIdByCode.get(menuDefinition.parentCode) ?? null)
+            : null,
+        label: menuDefinition.label,
+        href: menuDefinition.href,
+        resourceCode: menuDefinition.resourceCode,
+        sortOrder: menuDefinition.sortOrder,
+        active: true,
       },
       create: {
         companyId,
-        code: seed.code,
-        label: seed.label,
-        href: seed.href,
-        sortOrder: seed.sortOrder,
-        legacyMenuId: seed.legacyMenuId
-      }
-    });
-
-    const menuNode = await prisma.menuNode.upsert({
-      where: { id: `menu-node-${seed.code}` },
-      update: {
-        companyId,
-        domainId: domain.id,
-        menuId: menu.id,
-        parentId: null,
-        label: seed.label,
-        href: seed.href,
-        sortOrder: seed.sortOrder,
-        legacyMapId: seed.legacyMapId,
-        active: true
+        domainId: erpDomain.id,
+        parentId:
+          'parentCode' in menuDefinition
+            ? (menuItemIdByCode.get(menuDefinition.parentCode) ?? null)
+            : null,
+        code: menuDefinition.code,
+        label: menuDefinition.label,
+        href: menuDefinition.href,
+        resourceCode: menuDefinition.resourceCode,
+        sortOrder: menuDefinition.sortOrder,
       },
-      create: {
-        id: `menu-node-${seed.code}`,
-        companyId,
-        domainId: domain.id,
-        menuId: menu.id,
-        label: seed.label,
-        href: seed.href,
-        sortOrder: seed.sortOrder,
-        legacyMapId: seed.legacyMapId
-      }
     });
-
-    await prisma.roleMenuPermission.upsert({
-      where: { roleId_menuNodeId: { roleId: adminRole.id, menuNodeId: menuNode.id } },
+    menuItemIdByCode.set(menuDefinition.code, menuItem.id);
+    await prisma.rolePermission.upsert({
+      where: {
+        roleId_menuItemId: { roleId: adminRole.id, menuItemId: menuItem.id },
+      },
       update: {
         canRead: true,
         canCreate: true,
         canUpdate: true,
         canDelete: true,
-        canAdmin: true
+        canAdmin: true,
       },
       create: {
         roleId: adminRole.id,
-        menuNodeId: menuNode.id,
+        menuItemId: menuItem.id,
         canRead: true,
         canCreate: true,
         canUpdate: true,
         canDelete: true,
-        canAdmin: true
-      }
+        canAdmin: true,
+      },
     });
-
-    await prisma.roleMenuPermission.upsert({
-      where: { roleId_menuNodeId: { roleId: staffRole.id, menuNodeId: menuNode.id } },
+    const staffHasReadPermission =
+      !menuDefinition.resourceCode.startsWith('settings.');
+    await prisma.rolePermission.upsert({
+      where: {
+        roleId_menuItemId: { roleId: staffRole.id, menuItemId: menuItem.id },
+      },
       update: {
-        canRead: true,
+        canRead: staffHasReadPermission,
         canCreate: false,
         canUpdate: false,
         canDelete: false,
-        canAdmin: false
+        canAdmin: false,
       },
       create: {
         roleId: staffRole.id,
-        menuNodeId: menuNode.id,
-        canRead: true
-      }
+        menuItemId: menuItem.id,
+        canRead: staffHasReadPermission,
+      },
     });
   }
+  return adminUser;
+}
 
-  const childMenuGroups = uniErpModules
-    .filter((module) => module.children.length > 0)
-    .map((module) => ({
-      parentId: `menu-node-${module.code}`,
-      items: module.children
-    }));
+async function seedDemoItemsAndBoms(adminUserId: string) {
+  const [materialCategory, assemblyCategory, serviceCategory] =
+    await Promise.all([
+      prisma.itemCategory.upsert({
+        where: { companyId_code: { companyId, code: 'MATERIAL' } },
+        update: { name: '원자재', active: true },
+        create: { companyId, code: 'MATERIAL', name: '원자재' },
+      }),
+      prisma.itemCategory.upsert({
+        where: { companyId_code: { companyId, code: 'ASSEMBLY' } },
+        update: { name: '조립품', active: true },
+        create: { companyId, code: 'ASSEMBLY', name: '조립품' },
+      }),
+      prisma.itemCategory.upsert({
+        where: { companyId_code: { companyId, code: 'SERVICE' } },
+        update: { name: '서비스', active: true },
+        create: { companyId, code: 'SERVICE', name: '서비스' },
+      }),
+    ]);
+  const itemDefinitions = [
+    {
+      code: 'FRAME',
+      name: '태블릿 프레임',
+      itemType: ItemType.RAW_MATERIAL,
+      categoryId: materialCategory.id,
+      standardPrice: '18000',
+      costPrice: '12000',
+      trackInventory: true,
+    },
+    {
+      code: 'SCREW',
+      name: '조립 나사',
+      itemType: ItemType.RAW_MATERIAL,
+      categoryId: materialCategory.id,
+      standardPrice: '100',
+      costPrice: '40',
+      trackInventory: true,
+    },
+    {
+      code: 'PACK',
+      name: '포장 상자',
+      itemType: ItemType.CONSUMABLE,
+      categoryId: materialCategory.id,
+      standardPrice: '1500',
+      costPrice: '900',
+      trackInventory: true,
+    },
+    {
+      code: 'TABLET-CORE',
+      name: '태블릿 코어 조립품',
+      itemType: ItemType.COMPONENT,
+      categoryId: assemblyCategory.id,
+      standardPrice: '210000',
+      costPrice: '160000',
+      trackInventory: true,
+    },
+    {
+      code: 'TABLET-KIT',
+      name: 'QR 주문 태블릿',
+      itemType: ItemType.FINISHED_GOOD,
+      categoryId: assemblyCategory.id,
+      standardPrice: '320000',
+      costPrice: '190000',
+      trackInventory: true,
+    },
+    {
+      code: 'SCANNER',
+      name: '바코드 스캐너',
+      itemType: ItemType.FINISHED_GOOD,
+      categoryId: assemblyCategory.id,
+      standardPrice: '180000',
+      costPrice: '110000',
+      trackInventory: true,
+    },
+    {
+      code: 'INSTALL',
+      name: '현장 설치 지원',
+      itemType: ItemType.SERVICE,
+      categoryId: serviceCategory.id,
+      standardPrice: '300000',
+      costPrice: '0',
+      trackInventory: false,
+    },
+  ] as const;
+  const seededItemsByCode = new Map<string, { id: string; name: string }>();
+  for (const itemDefinition of itemDefinitions) {
+    const seededItem = await prisma.item.upsert({
+      where: { companyId_code: { companyId, code: itemDefinition.code } },
+      update: {
+        name: itemDefinition.name,
+        itemType: itemDefinition.itemType,
+        categoryId: itemDefinition.categoryId,
+        standardPrice: itemDefinition.standardPrice,
+        costPrice: itemDefinition.costPrice,
+        trackInventory: itemDefinition.trackInventory,
+        active: true,
+      },
+      create: { companyId, ...itemDefinition },
+    });
+    seededItemsByCode.set(itemDefinition.code, seededItem);
+  }
+  const mainWarehouse = await prisma.warehouse.upsert({
+    where: { companyId_code: { companyId, code: 'MAIN' } },
+    update: { name: '메인 창고', location: '구리', active: true },
+    create: { companyId, code: 'MAIN', name: '메인 창고', location: '구리' },
+  });
+  const productionWarehouse = await prisma.warehouse.upsert({
+    where: { companyId_code: { companyId, code: 'LINE' } },
+    update: { name: '생산 창고', location: '구리 생산라인', active: true },
+    create: {
+      companyId,
+      code: 'LINE',
+      name: '생산 창고',
+      location: '구리 생산라인',
+    },
+  });
 
-  // Seeded into UniPlan menu branches while preserving the original legacy branch ids.
-  for (const group of childMenuGroups) {
-    for (const seed of group.items) {
-      const menu = await prisma.menu.upsert({
-        where: { companyId_code: { companyId, code: seed.code } },
-        update: {
-          label: seed.label,
-          href: seed.href,
-          sortOrder: seed.sortOrder,
-          legacyMenuId: seed.legacyMenuId,
-          active: true
-        },
-        create: {
-          companyId,
-          code: seed.code,
-          label: seed.label,
-          href: seed.href,
-          sortOrder: seed.sortOrder,
-          legacyMenuId: seed.legacyMenuId
-        }
-      });
-
-      const menuNode = await prisma.menuNode.upsert({
-        where: { id: `menu-node-${seed.code}` },
-        update: {
-          companyId,
-          domainId: domain.id,
-          menuId: menu.id,
-          parentId: group.parentId,
-          label: seed.label,
-          href: seed.href,
-          sortOrder: seed.sortOrder,
-          legacyMapId: seed.legacyMapId,
-          active: true
-        },
-        create: {
-          id: `menu-node-${seed.code}`,
-          companyId,
-          domainId: domain.id,
-          menuId: menu.id,
-          parentId: group.parentId,
-          label: seed.label,
-          href: seed.href,
-          sortOrder: seed.sortOrder,
-          legacyMapId: seed.legacyMapId
-        }
-      });
-
-      await prisma.roleMenuPermission.upsert({
-        where: { roleId_menuNodeId: { roleId: adminRole.id, menuNodeId: menuNode.id } },
-        update: {
-          canRead: true,
-          canCreate: true,
-          canUpdate: true,
-          canDelete: true,
-          canAdmin: true
-        },
-        create: {
-          roleId: adminRole.id,
-          menuNodeId: menuNode.id,
-          canRead: true,
-          canCreate: true,
-          canUpdate: true,
-          canDelete: true,
-          canAdmin: true
-        }
-      });
-
-      await prisma.roleMenuPermission.upsert({
-        where: { roleId_menuNodeId: { roleId: staffRole.id, menuNodeId: menuNode.id } },
-        update: {
-          canRead: true,
-          canCreate: false,
-          canUpdate: false,
-          canDelete: false,
-          canAdmin: false
-        },
-        create: {
-          roleId: staffRole.id,
-          menuNodeId: menuNode.id,
-          canRead: true
-        }
-      });
-    }
+  const tabletCoreBom = await prisma.bom.upsert({
+    where: { companyId_code: { companyId, code: 'BOM-TABLET-CORE' } },
+    update: { name: '태블릿 코어 BOM', active: true },
+    create: {
+      companyId,
+      code: 'BOM-TABLET-CORE',
+      name: '태블릿 코어 BOM',
+      outputItemId: seededItemsByCode.get('TABLET-CORE')!.id,
+    },
+  });
+  const tabletCoreDraftRevision = await prisma.bomVersion.upsert({
+    where: { bomId_revision: { bomId: tabletCoreBom.id, revision: 1 } },
+    update: {},
+    create: { bomId: tabletCoreBom.id, revision: 1 },
+  });
+  if (tabletCoreDraftRevision.status === BomVersionStatus.DRAFT) {
+    await replaceDraftBomComponents(companyId, tabletCoreDraftRevision.id, [
+      {
+        itemId: seededItemsByCode.get('FRAME')!.id,
+        quantity: '1',
+        sortOrder: 10,
+      },
+      {
+        itemId: seededItemsByCode.get('SCREW')!.id,
+        quantity: '4',
+        sortOrder: 20,
+      },
+    ]);
+    await activateBomRevision(companyId, tabletCoreDraftRevision.id);
   }
 
-  const activeMenuCodes = [
-    ...navigationSeeds.map((seed) => seed.code),
-    ...childMenuGroups.flatMap((group) => group.items.map((item) => item.code))
-  ];
-  const activeMenuNodeIds = activeMenuCodes.map((code) => `menu-node-${code}`);
-
-  await prisma.menu.updateMany({
-    where: {
+  const tabletKitBom = await prisma.bom.upsert({
+    where: { companyId_code: { companyId, code: 'BOM-TABLET-KIT' } },
+    update: { name: 'QR 주문 태블릿 BOM', active: true },
+    create: {
       companyId,
-      code: { notIn: activeMenuCodes }
+      code: 'BOM-TABLET-KIT',
+      name: 'QR 주문 태블릿 BOM',
+      outputItemId: seededItemsByCode.get('TABLET-KIT')!.id,
     },
-    data: { active: false }
   });
-
-  await prisma.menuNode.updateMany({
-    where: {
-      companyId,
-      id: { notIn: activeMenuNodeIds }
-    },
-    data: { active: false }
+  const tabletKitDraftRevision = await prisma.bomVersion.upsert({
+    where: { bomId_revision: { bomId: tabletKitBom.id, revision: 1 } },
+    update: {},
+    create: { bomId: tabletKitBom.id, revision: 1 },
   });
+  if (tabletKitDraftRevision.status === BomVersionStatus.DRAFT) {
+    await replaceDraftBomComponents(companyId, tabletKitDraftRevision.id, [
+      {
+        itemId: seededItemsByCode.get('TABLET-CORE')!.id,
+        quantity: '1',
+        sortOrder: 10,
+      },
+      {
+        itemId: seededItemsByCode.get('PACK')!.id,
+        quantity: '1',
+        sortOrder: 20,
+      },
+      {
+        itemId: seededItemsByCode.get('SCREW')!.id,
+        quantity: '2',
+        sortOrder: 30,
+      },
+    ]);
+    await activateBomRevision(companyId, tabletKitDraftRevision.id);
+  }
 
-  const employees = await Promise.all([
+  await postInventoryTransaction(companyId, {
+    type: 'OPENING',
+    idempotencyKey: 'seed-opening-inventory-v1',
+    occurredAt: atUtcMidnight('2026-05-01'),
+    reference: 'UNIPLAN-DEMO-OPENING',
+    createdById: adminUserId,
+    lines: [
+      {
+        itemId: seededItemsByCode.get('FRAME')!.id,
+        warehouseId: mainWarehouse.id,
+        quantity: '100',
+      },
+      {
+        itemId: seededItemsByCode.get('SCREW')!.id,
+        warehouseId: mainWarehouse.id,
+        quantity: '500',
+      },
+      {
+        itemId: seededItemsByCode.get('PACK')!.id,
+        warehouseId: mainWarehouse.id,
+        quantity: '100',
+      },
+      {
+        itemId: seededItemsByCode.get('TABLET-KIT')!.id,
+        warehouseId: mainWarehouse.id,
+        quantity: '6',
+      },
+      {
+        itemId: seededItemsByCode.get('SCANNER')!.id,
+        warehouseId: mainWarehouse.id,
+        quantity: '12',
+      },
+    ],
+  });
+  await Promise.all([
+    prisma.inventoryBalance.update({
+      where: {
+        companyId_itemId_warehouseId: {
+          companyId,
+          itemId: seededItemsByCode.get('TABLET-KIT')!.id,
+          warehouseId: mainWarehouse.id,
+        },
+      },
+      data: { safetyQuantity: 10 },
+    }),
+    prisma.inventoryBalance.update({
+      where: {
+        companyId_itemId_warehouseId: {
+          companyId,
+          itemId: seededItemsByCode.get('SCANNER')!.id,
+          warehouseId: mainWarehouse.id,
+        },
+      },
+      data: { safetyQuantity: 8 },
+    }),
+  ]);
+  return { seededItemsByCode, mainWarehouse, productionWarehouse };
+}
+
+async function seedDemoSalesAndCrm(
+  seededItemsByCode: Map<string, { id: string; name: string }>,
+) {
+  await Promise.all([
     prisma.employee.upsert({
       where: { companyId_employeeNo: { companyId, employeeNo: 'E001' } },
       update: {},
-      create: { companyId, employeeNo: 'E001', name: '김영업', department: '영업팀', position: '팀장', isSales: true }
+      create: {
+        companyId,
+        employeeNo: 'E001',
+        name: '김영업',
+        department: '영업팀',
+        position: '팀장',
+        isSales: true,
+      },
     }),
     prisma.employee.upsert({
       where: { companyId_employeeNo: { companyId, employeeNo: 'E002' } },
       update: {},
-      create: { companyId, employeeNo: 'E002', name: '박운영', department: '운영팀', position: '매니저', isSales: false }
-    })
+      create: {
+        companyId,
+        employeeNo: 'E002',
+        name: '박운영',
+        department: '운영팀',
+        position: '매니저',
+      },
+    }),
   ]);
-
-  const customerSeeds = [
+  const customerDefinitions = [
     ['C001', '구리정밀', 'A'],
     ['C002', '남양유통', 'B'],
     ['C003', '한강푸드', 'A'],
     ['C004', '별내테크', 'C'],
-    ['C005', '다산메디', 'B']
+    ['C005', '다산메디', 'B'],
   ] as const;
-
-  const customers = await Promise.all(
-    customerSeeds.map(([code, name, grade]) =>
+  const seededCustomers = await Promise.all(
+    customerDefinitions.map(([customerCode, customerName, customerGrade]) =>
       prisma.customer.upsert({
-        where: { companyId_code: { companyId, code } },
-        update: { name, grade },
-        create: { companyId, code, name, grade, phone: '02-0000-0000', email: `${code.toLowerCase()}@example.com` }
-      })
-    )
+        where: { companyId_code: { companyId, code: customerCode } },
+        update: { name: customerName, grade: customerGrade },
+        create: {
+          companyId,
+          code: customerCode,
+          name: customerName,
+          grade: customerGrade,
+          phone: '02-0000-0000',
+          email: `${customerCode.toLowerCase()}@example.com`,
+        },
+      }),
+    ),
   );
-
-  const saasCategory = await prisma.productCategory.upsert({
-    where: { companyId_code: { companyId, code: 'SAAS' } },
-    update: {},
-    create: { companyId, code: 'SAAS', name: 'SaaS' }
-  });
-  const deviceCategory = await prisma.productCategory.upsert({
-    where: { companyId_code: { companyId, code: 'DEVICE' } },
-    update: {},
-    create: { companyId, code: 'DEVICE', name: 'Device' }
-  });
-
-  const productSeeds = [
-    ['P001', 'ERP Basic 월구독', saasCategory.id, 49000, 999, 0],
-    ['P002', '재고관리 모듈', saasCategory.id, 59000, 999, 0],
-    ['P003', 'QR 주문 태블릿', deviceCategory.id, 320000, 6, 10],
-    ['P004', '바코드 스캐너', deviceCategory.id, 180000, 12, 8],
-    ['P005', '현장 설치 지원', saasCategory.id, 300000, 999, 0]
+  const invoiceDefinitions = [
+    [
+      'INV-202605-001',
+      seededCustomers[0],
+      '2026-05-01',
+      4_800_000,
+      4_800_000,
+      'paid',
+    ],
+    [
+      'INV-202605-002',
+      seededCustomers[1],
+      '2026-05-02',
+      2_600_000,
+      1_000_000,
+      'partial',
+    ],
+    [
+      'INV-202605-003',
+      seededCustomers[2],
+      '2026-05-03',
+      7_200_000,
+      0,
+      'issued',
+    ],
+    [
+      'INV-202604-001',
+      seededCustomers[3],
+      '2026-04-20',
+      1_800_000,
+      0,
+      'overdue',
+    ],
+    [
+      'INV-202604-002',
+      seededCustomers[4],
+      '2026-04-28',
+      3_600_000,
+      3_600_000,
+      'paid',
+    ],
+    [
+      'INV-202604-003',
+      seededCustomers[0],
+      '2026-04-10',
+      5_200_000,
+      5_200_000,
+      'paid',
+    ],
   ] as const;
-
-  const products = await Promise.all(
-    productSeeds.map(([code, name, categoryId, price]) =>
-      prisma.product.upsert({
-        where: { companyId_code: { companyId, code } },
-        update: { name, categoryId, standardPrice: price },
-        create: { companyId, code, name, categoryId, standardPrice: price, productType: code === 'P003' || code === 'P004' ? 'product' : 'service' }
-      })
-    )
-  );
-
-  const warehouse = await prisma.warehouse.upsert({
-    where: { companyId_code: { companyId, code: 'MAIN' } },
-    update: {},
-    create: { companyId, code: 'MAIN', name: '메인 창고', location: '구리' }
-  });
-
-  for (const [index, seed] of productSeeds.entries()) {
-    await prisma.inventoryBalance.upsert({
-      where: { companyId_productId_warehouseId: { companyId, productId: products[index].id, warehouseId: warehouse.id } },
-      update: { quantity: seed[4], safetyQuantity: seed[5] },
-      create: { companyId, productId: products[index].id, warehouseId: warehouse.id, quantity: seed[4], safetyQuantity: seed[5] }
-    });
-  }
-
-  const invoiceSeeds = [
-    ['INV-202605-001', customers[0], '2026-05-01', 4_800_000, 4_800_000, 'paid'],
-    ['INV-202605-002', customers[1], '2026-05-02', 2_600_000, 1_000_000, 'partial'],
-    ['INV-202605-003', customers[2], '2026-05-03', 7_200_000, 0, 'issued'],
-    ['INV-202604-001', customers[3], '2026-04-20', 1_800_000, 0, 'overdue'],
-    ['INV-202604-002', customers[4], '2026-04-28', 3_600_000, 3_600_000, 'paid'],
-    ['INV-202604-003', customers[0], '2026-04-10', 5_200_000, 5_200_000, 'paid']
-  ] as const;
-
-  for (const [index, [invoiceNo, customer, issueDate, totalAmount, paidAmount, status]] of invoiceSeeds.entries()) {
+  const rotatingInvoiceItems = [
+    seededItemsByCode.get('TABLET-KIT')!,
+    seededItemsByCode.get('SCANNER')!,
+    seededItemsByCode.get('INSTALL')!,
+  ];
+  for (const [
+    invoiceDefinitionIndex,
+    [invoiceNo, customer, issueDate, totalAmount, paidAmount, status],
+  ] of invoiceDefinitions.entries()) {
+    const supplyAmount = Math.round(totalAmount / 1.1);
     const invoice = await prisma.invoice.upsert({
       where: { companyId_invoiceNo: { companyId, invoiceNo } },
-      update: { totalAmount, paidAmount, remainingAmount: totalAmount - paidAmount, status },
+      update: {
+        totalAmount,
+        paidAmount,
+        remainingAmount: totalAmount - paidAmount,
+        status,
+      },
       create: {
         companyId,
         invoiceNo,
         customerId: customer.id,
-        issueDate: date(issueDate),
-        dueDate: date(issueDate),
+        issueDate: atUtcMidnight(issueDate),
+        dueDate: atUtcMidnight(issueDate),
         status,
-        supplyAmount: Math.round(totalAmount / 1.1),
-        taxAmount: totalAmount - Math.round(totalAmount / 1.1),
+        supplyAmount,
+        taxAmount: totalAmount - supplyAmount,
         totalAmount,
         paidAmount,
-        remainingAmount: totalAmount - paidAmount
-      }
+        remainingAmount: totalAmount - paidAmount,
+      },
     });
-
-    const product = products[index % products.length];
+    const invoiceItem =
+      rotatingInvoiceItems[
+        invoiceDefinitionIndex % rotatingInvoiceItems.length
+      ];
     await prisma.invoiceItem.deleteMany({ where: { invoiceId: invoice.id } });
     await prisma.invoiceItem.create({
       data: {
         invoiceId: invoice.id,
-        productId: product.id,
-        itemName: product.name,
+        itemId: invoiceItem.id,
+        itemName: invoiceItem.name,
         quantity: 1,
         unitPrice: totalAmount,
-        supplyAmount: Math.round(totalAmount / 1.1),
-        taxAmount: totalAmount - Math.round(totalAmount / 1.1),
-        totalAmount
-      }
+        supplyAmount,
+        taxAmount: totalAmount - supplyAmount,
+        totalAmount,
+      },
     });
   }
-
   await prisma.consultation.deleteMany({ where: { companyId } });
   await prisma.consultation.createMany({
     data: [
-      { companyId, customerId: customers[1].id, type: '도입문의', status: 'open', content: '재고관리 모듈 견적 요청', createdAt: date('2026-04-30') },
-      { companyId, customerId: customers[3].id, type: '장애문의', status: 'pending', content: '대시보드 로딩 지연 문의', createdAt: date('2026-04-29') },
-      { companyId, customerId: customers[0].id, type: '사용문의', status: 'resolved', content: '거래처별 매출 조회 방법', createdAt: date('2026-05-02') }
-    ]
+      {
+        companyId,
+        customerId: seededCustomers[1].id,
+        type: '도입문의',
+        status: 'open',
+        content: '재고관리 모듈 견적 요청',
+        createdAt: atUtcMidnight('2026-04-30'),
+      },
+      {
+        companyId,
+        customerId: seededCustomers[3].id,
+        type: '장애문의',
+        status: 'pending',
+        content: '대시보드 로딩 지연 문의',
+        createdAt: atUtcMidnight('2026-04-29'),
+      },
+      {
+        companyId,
+        customerId: seededCustomers[0].id,
+        type: '사용문의',
+        status: 'resolved',
+        content: '거래처별 매출 조회 방법',
+        createdAt: atUtcMidnight('2026-05-02'),
+      },
+    ],
   });
-
   await prisma.serviceCase.deleteMany({ where: { companyId } });
   await prisma.serviceCase.createMany({
     data: [
-      { companyId, customerId: customers[2].id, productId: products[2].id, status: 'delayed', symptom: 'QR 주문 태블릿 충전 불량', receivedAt: date('2026-04-27'), dueAt: date('2026-05-01') },
-      { companyId, customerId: customers[4].id, productId: products[3].id, status: 'in_progress', symptom: '스캐너 인식률 저하', receivedAt: date('2026-05-01'), dueAt: date('2026-05-04') }
-    ]
+      {
+        companyId,
+        customerId: seededCustomers[2].id,
+        itemId: seededItemsByCode.get('TABLET-KIT')!.id,
+        status: 'delayed',
+        symptom: 'QR 주문 태블릿 충전 불량',
+        receivedAt: atUtcMidnight('2026-04-27'),
+        dueAt: atUtcMidnight('2026-05-01'),
+      },
+      {
+        companyId,
+        customerId: seededCustomers[4].id,
+        itemId: seededItemsByCode.get('SCANNER')!.id,
+        status: 'in_progress',
+        symptom: '스캐너 인식률 저하',
+        receivedAt: atUtcMidnight('2026-05-01'),
+        dueAt: atUtcMidnight('2026-05-04'),
+      },
+    ],
   });
+  return seededCustomers.length;
+}
 
+async function seedDemoDatabase() {
+  const adminUser = await seedDemoIdentityAndPermissions();
+  const inventorySeedResult = await seedDemoItemsAndBoms(adminUser.id);
+  const customerCount = await seedDemoSalesAndCrm(
+    inventorySeedResult.seededItemsByCode,
+  );
   console.log('Seed complete:', {
     companyId,
-    customers: customers.length,
-    products: products.length,
-    invoices: invoiceSeeds.length,
-    employees: employees.length,
-    menus: navigationSeeds.length + childMenuGroups.reduce((total, group) => total + group.items.length, 0)
+    menus: menuDefinitions.length,
+    items: inventorySeedResult.seededItemsByCode.size,
+    customers: customerCount,
+    warehouses: 2,
+    boms: 2,
   });
 }
 
-main()
-  .catch((error) => {
-    console.error(error);
-    process.exit(1);
+seedDemoDatabase()
+  .catch((seedFailure) => {
+    console.error(seedFailure);
+    process.exitCode = 1;
   })
-  .finally(async () => {
-    await prisma.$disconnect();
-  });
+  .finally(async () => prisma.$disconnect());

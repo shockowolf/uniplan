@@ -46,6 +46,6 @@ export type QueryTemplate = {
   run: (context: TemplateContext) => Promise<ChatResult>;
 };
 
-export function money(value: number) {
-  return `${Math.round(value / 10000).toLocaleString('ko-KR')}만원`;
+export function money(value: { toString(): string } | number) {
+  return `${Math.round(Number(value) / 10000).toLocaleString('ko-KR')}만원`;
 }
