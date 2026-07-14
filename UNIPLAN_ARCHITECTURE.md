@@ -259,6 +259,15 @@ export type QueryTemplate = {
 - 감사 metadata는 action별 키 allow-list, 깊이·키 수·배열·문자열·직렬화 크기 제한을 모두 통과해야 한다. 이메일, 회사 코드, 이름, 비밀번호, 토큰, 쿠키, 요청 본문, 고객/연락처/메모/예외 stack 계열 키는 거부한다.
 - `/api/system/audit`는 실제 세션과 `system.audit` read 권한을 요구하며 회사 범위, 제한된 필터, newest-first cursor, allow-list DTO, `private, no-store`/`Vary: Cookie`를 강제한다.
 
+### U11 백업과 복구 검증 경계
+
+- PostgreSQL 백업은 호스트 잠금 아래 `pg_dump` custom format으로 만들고 같은 파일시스템의 mode-0700 staging에서 공개 age recipient로만 암호화한다. 평문 fallback과 password-mode 암호화는 없다.
+- 암호문과 allow-list manifest는 각각 fsync한 뒤 암호문, manifest 순서로 atomic rename한다. manifest가 complete pair의 commit marker이며 실패한 실행은 로컬 pair를 공개하지 않는다.
+- manifest에는 암호문 SHA-256/크기, 생성 시각, credential이 제거된 DB identity, Prisma migration 수/최신 버전, 도구 버전만 둔다. DB URL, 사용자, 비밀번호, recipient, row 내용은 기록하지 않는다.
+- 운영 백업은 configured rclone named remote에 대한 artifact/manifest copy와 원격 size/SHA-256 검증이 모두 성공해야 local pair를 성공으로 공개한다. retention은 무결성이 확인된 pair만 다루며 마지막 known-good pair를 남긴다.
+- 복구 검증은 명시적 guard와 기존에 존재하지 않는 별도 `*_restore_verify` 데이터베이스만 허용한다. checksum 검증 후 mode-0700 temp에서만 복호화하고 `pg_restore`, Prisma migration/schema, bounded count/integrity, read-only smoke를 수행한 뒤 target과 평문을 항상 제거한다.
+- 이 경계는 application/public 데이터베이스에 restore/reset/migration을 실행하지 않으며 application 기능과 독립된 운영 도구로 실행한다.
+
 ## 9. 데모 데이터 전략
 
 MVP seed는 실제 easierp 데이터를 직접 넣지 않고, 다음 도메인의 가짜 데이터를 생성한다.

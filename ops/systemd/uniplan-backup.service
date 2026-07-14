@@ -1,0 +1,28 @@
+[Unit]
+Description=UNIPLAN encrypted PostgreSQL backup
+Documentation=file:///opt/uniplan/docs/BACKUP_RESTORE_RUNBOOK.md
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+WorkingDirectory=/opt/uniplan
+Environment=UNIPLAN_BACKUP_ENV_FILE=/etc/uniplan/backup.env
+ExecStart=/usr/bin/npm run backup:postgres
+UMask=0077
+RuntimeDirectory=uniplan-backup
+RuntimeDirectoryMode=0700
+StateDirectory=uniplan-backups
+StateDirectoryMode=0700
+NoNewPrivileges=true
+PrivateDevices=true
+PrivateTmp=true
+ProtectControlGroups=true
+ProtectHome=true
+ProtectKernelModules=true
+ProtectKernelTunables=true
+ProtectSystem=strict
+ReadWritePaths=/run/uniplan-backup /var/lib/uniplan-backups
+RestrictSUIDSGID=true

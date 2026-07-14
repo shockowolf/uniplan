@@ -60,6 +60,8 @@ npm run db:reset
 
 Use `npm run db:migrate` for non-destructive migration deployment. `npm run db:reset` is reserved for disposable local/test data.
 
+Encrypted PostgreSQL backups and guarded disposable restore drills are operated with `npm run backup:postgres` and `npm run restore:verify`. They are intentionally non-interactive and fail closed; see [the backup and restore runbook](docs/BACKUP_RESTORE_RUNBOOK.md) before configuring either command.
+
 ## Invite-only authentication
 
 There is no public signup. After an operator creates an invited company user, set or reset that user's password from an interactive terminal:

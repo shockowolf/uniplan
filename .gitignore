@@ -31,5 +31,18 @@ build/
 *.zip
 *.tar.gz
 
+# PostgreSQL backup/restore runtime data (must live outside the repository)
+/backups/
+/backup/
+.backup-staging-*/
+.restore-staging-*/
+*.dump
+*.pgdump
+*.dump.age
+uniplan-*.manifest.json
+*.agekey
+age-identity*.txt
+rclone.conf
+
 # macOS
 .DS_Store
