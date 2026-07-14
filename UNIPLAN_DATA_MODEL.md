@@ -579,3 +579,25 @@ memos
 PostgreSQL 운영 스키마의 테넌트 소유 테이블은 기본 `id`와 별도로 `(companyId, id)` unique key를 가진다. 자식과 조인 테이블(`auth_sessions`, `user_roles`, `role_permissions`, `bom_versions`, `bom_components`, `sales_order_items`, `invoice_items`, `payments` 포함)에도 `companyId`를 저장하고 부모의 복합 키를 참조한다. 따라서 전역적으로 유효한 다른 회사의 `id`를 넣어도 데이터베이스가 관계를 거부한다.
 
 기존 데이터 backfill은 부모로부터 회사 ID를 채우기 전에 모든 다중 부모 관계의 회사가 같은지 검사한다. 불일치가 있으면 마이그레이션이 실패하며, 임의의 부모를 기준으로 소유권을 덮어쓰지 않는다.
+
+## 9. U10 감사 이벤트
+
+`audit_events`는 기존 업무 테이블을 변경하지 않고 추가하는 회사별 감사 원장이다.
+
+```text
+audit_events
+- id uuid pk                         -- 서버 생성 고엔트로피 ID
+- company_id fk                     -- 필수 테넌트
+- actor_user_id nullable            -- (company_id, actor_user_id) → users 복합 FK
+- action varchar(80)                -- 고정 allow-list 동작
+- resource_type varchar(64)
+- resource_id varchar(128) nullable -- 내부 opaque ID만 허용
+- outcome enum                      -- succeeded/denied/failed
+- correlation_hash char(64) nullable
+- idempotency_key_hash char(64) nullable
+- subject_hash char(64) nullable
+- metadata jsonb                    -- 작은 action별 allow-list 객체
+- created_at timestamptz            -- 서버 시각
+```
+
+`(company_id, created_at, id)`, action/time, resource/time, outcome/time 인덱스를 두며, 동일 회사·action·idempotency HMAC에는 semantic unique key를 둔다. PostgreSQL UPDATE/DELETE 거부 트리거가 append-only를 강제한다. 감사 조회 DTO에는 회사 ID와 내부 HMAC 컬럼을 노출하지 않는다.

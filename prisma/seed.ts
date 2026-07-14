@@ -108,6 +108,14 @@ const menuDefinitions = [
     sortOrder: 10,
     parentCode: 'settings',
   },
+  {
+    code: 'system-audit',
+    label: '감사 기록',
+    href: null,
+    resourceCode: 'system.audit',
+    sortOrder: 20,
+    parentCode: 'settings',
+  },
 ] as const;
 
 async function seedDemoIdentityAndPermissions() {
@@ -245,6 +253,7 @@ async function seedDemoIdentityAndPermissions() {
 }
 
 async function seedDemoItemsAndBoms(adminUserId: string) {
+  const auditActor = { companyId, actorUserId: adminUserId } as const;
   const [materialCategory, assemblyCategory, serviceCategory] =
     await Promise.all([
       prisma.itemCategory.upsert({
@@ -388,8 +397,8 @@ async function seedDemoItemsAndBoms(adminUserId: string) {
         quantity: '4',
         sortOrder: 20,
       },
-    ]);
-    await activateBomRevision(companyId, tabletCoreDraftRevision.id);
+    ], auditActor);
+    await activateBomRevision(companyId, tabletCoreDraftRevision.id, auditActor);
   }
 
   const tabletKitBom = await prisma.bom.upsert({
@@ -424,8 +433,8 @@ async function seedDemoItemsAndBoms(adminUserId: string) {
         quantity: '2',
         sortOrder: 30,
       },
-    ]);
-    await activateBomRevision(companyId, tabletKitDraftRevision.id);
+    ], auditActor);
+    await activateBomRevision(companyId, tabletKitDraftRevision.id, auditActor);
   }
 
   await postInventoryTransaction(companyId, {
@@ -433,7 +442,6 @@ async function seedDemoItemsAndBoms(adminUserId: string) {
     idempotencyKey: 'seed-opening-inventory-v1',
     occurredAt: atUtcMidnight('2026-05-01'),
     reference: 'UNIPLAN-DEMO-OPENING',
-    createdById: adminUserId,
     lines: [
       {
         itemId: seededItemsByCode.get('FRAME')!.id,
@@ -461,7 +469,7 @@ async function seedDemoItemsAndBoms(adminUserId: string) {
         quantity: '12',
       },
     ],
-  });
+  }, auditActor);
   await Promise.all([
     prisma.inventoryBalance.update({
       where: {

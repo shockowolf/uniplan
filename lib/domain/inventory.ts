@@ -6,6 +6,11 @@ import {
   type PrismaClient,
 } from '@prisma/client';
 import { prisma } from '@/lib/db';
+import {
+  recordMutationAuditEvent,
+  type AuditWriteHooks,
+  type TrustedMutationActor,
+} from '@/lib/audit/service.server';
 import { explodeBomRevision } from '@/lib/domain/boms';
 import {
   type CompanyMutationHooks,
@@ -25,7 +30,6 @@ type CommonInput = {
   occurredAt?: Date | string;
   reference?: string | null;
   memo?: string | null;
-  createdById?: string | null;
 };
 
 type SimpleLine = { itemId: string; warehouseId: string; quantity: Quantity };
@@ -82,7 +86,7 @@ type InventoryPostingMetadata = {
   payloadHash: string;
 };
 
-export type InventoryPostingHooks = CompanyMutationHooks & {
+export type InventoryPostingHooks = CompanyMutationHooks & AuditWriteHooks & {
   afterEntries?: (
     databaseTransaction: Prisma.TransactionClient,
     transactionId: string,
@@ -173,6 +177,7 @@ function canonicalLineOrder(
  */
 export function canonicalizeInventoryPayload(
   input: PostInventoryTransactionInput,
+  actorUserId: string,
 ) {
   const commonPayload = {
     type: input.type,
@@ -181,7 +186,7 @@ export function canonicalizeInventoryPayload(
       : null,
     reference: input.reference?.trim() || null,
     memo: input.memo?.trim() || null,
-    createdById: input.createdById ?? null,
+    createdById: actorUserId,
   };
   if (
     input.type === 'OPENING' ||
@@ -255,9 +260,14 @@ export function canonicalizeInventoryPayload(
   throw new ValidationError('Unsupported inventory transaction type');
 }
 
-export function hashInventoryPayload(input: PostInventoryTransactionInput) {
+export function hashInventoryPayload(
+  input: PostInventoryTransactionInput,
+  actorUserId: string,
+) {
   return createHash('sha256')
-    .update(JSON.stringify(stableValue(canonicalizeInventoryPayload(input))))
+    .update(
+      JSON.stringify(stableValue(canonicalizeInventoryPayload(input, actorUserId))),
+    )
     .digest('hex');
 }
 
@@ -420,7 +430,7 @@ async function buildInventoryPostingPlan(
 
 async function validateInventoryPostingReferences(
   companyId: string,
-  input: PostInventoryTransactionInput,
+  actorUserId: string,
   plannedInventoryEntries: PlannedInventoryEntry[],
   databaseTransaction: Prisma.TransactionClient,
 ) {
@@ -463,17 +473,15 @@ async function validateInventoryPostingReferences(
       'All warehouses must be active and belong to the same company',
       'INVALID_WAREHOUSE',
     );
-  if (input.createdById) {
-    const postingUser = await databaseTransaction.user.findFirst({
-      where: { id: input.createdById, companyId, status: 'active' },
-      select: { id: true },
-    });
-    if (!postingUser)
-      throw new ValidationError(
-        'Posting user must belong to the same company',
-        'INVALID_POSTING_USER',
-      );
-  }
+  const postingUser = await databaseTransaction.user.findFirst({
+    where: { id: actorUserId, companyId, status: 'active' },
+    select: { id: true },
+  });
+  if (!postingUser)
+    throw new ValidationError(
+      'Posting user must belong to the same company',
+      'INVALID_POSTING_USER',
+    );
 }
 
 async function createAndLockInventoryBalances(
@@ -591,6 +599,7 @@ async function executeInventoryPostingTransaction(
   companyId: string,
   input: PostInventoryTransactionInput,
   postingMetadata: InventoryPostingMetadata,
+  actor: TrustedMutationActor,
   hooks: InventoryPostingHooks | undefined,
   databaseTransaction: Prisma.TransactionClient,
 ) {
@@ -610,7 +619,7 @@ async function executeInventoryPostingTransaction(
   );
   await validateInventoryPostingReferences(
     companyId,
-    input,
+    actor.actorUserId,
     inventoryPostingPlan.plannedInventoryEntries,
     databaseTransaction,
   );
@@ -634,7 +643,7 @@ async function executeInventoryPostingTransaction(
         occurredAt: parseOccurredAt(input.occurredAt),
         reference: input.reference?.trim() || null,
         memo: input.memo?.trim() || null,
-        createdById: input.createdById ?? null,
+        createdById: actor.actorUserId,
         bomVersionId: inventoryPostingPlan.bomVersionId,
         reversalOfId: inventoryPostingPlan.reversalOfId,
       },
@@ -669,15 +678,36 @@ async function executeInventoryPostingTransaction(
     });
   }
 
-  return databaseTransaction.inventoryTransaction.findUniqueOrThrow({
+  const postedTransaction = await databaseTransaction.inventoryTransaction.findUniqueOrThrow({
     where: { id: inventoryTransaction.id, companyId },
     include: inventoryTransactionInclude,
   });
+  const action =
+    input.type === 'PRODUCTION'
+      ? 'inventory.production_posted'
+      : input.type === 'REVERSAL'
+        ? 'inventory.transaction_reversed'
+        : 'inventory.transaction_posted';
+  await recordMutationAuditEvent(
+    databaseTransaction,
+    companyId,
+    actor,
+    {
+      action,
+      resourceType: 'inventory_transaction',
+      resourceId: postedTransaction.id,
+      idempotencyMaterial: `inventory:${companyId}:${postingMetadata.idempotencyKey}`,
+      metadata: { entryCount: postedTransaction.entries.length },
+    },
+    hooks,
+  );
+  return postedTransaction;
 }
 
 export async function postInventoryTransaction(
   companyId: string,
   input: PostInventoryTransactionInput,
+  actor: TrustedMutationActor,
   options: {
     db?: PrismaClient;
     maxAttempts?: number;
@@ -688,7 +718,13 @@ export async function postInventoryTransaction(
   const idempotencyKey = requiredText(input.idempotencyKey, 'idempotencyKey');
   if (idempotencyKey.length > 200)
     throw new ValidationError('idempotencyKey is too long');
-  const payloadHash = hashInventoryPayload(input);
+  if (actor.companyId !== companyId) {
+    throw new ValidationError(
+      'Posting user must belong to the same company',
+      'INVALID_POSTING_USER',
+    );
+  }
+  const payloadHash = hashInventoryPayload(input, actor.actorUserId);
   const postingMetadata = { idempotencyKey, payloadHash };
   const existingInventoryTransaction = await findIdempotentInventoryTransaction(
     companyId,
@@ -707,6 +743,7 @@ export async function postInventoryTransaction(
           companyId,
           input,
           postingMetadata,
+          actor,
           options.hooks,
           databaseTransaction,
         ),
@@ -796,21 +833,35 @@ export async function reconcileInventory(
 export async function createWarehouse(
   companyId: string,
   input: { code: string; name: string; location?: string | null },
+  actor: TrustedMutationActor,
   databaseClient: PrismaClient = prisma,
   transactionOptions: CompanyMutationOptions = {},
 ) {
   return withCompanyMutationTransaction(
     companyId,
     databaseClient,
-    (databaseTransaction) =>
-      databaseTransaction.warehouse.create({
+    async (databaseTransaction) => {
+      const warehouse = await databaseTransaction.warehouse.create({
         data: {
           companyId,
           code: requiredText(input.code, 'code'),
           name: requiredText(input.name, 'name'),
           location: input.location?.trim() || null,
         },
-      }),
+      });
+      await recordMutationAuditEvent(
+        databaseTransaction,
+        companyId,
+        actor,
+        {
+          action: 'warehouse.created',
+          resourceType: 'warehouse',
+          resourceId: warehouse.id,
+        },
+        transactionOptions.auditHooks,
+      );
+      return warehouse;
+    },
     transactionOptions,
   );
 }
@@ -819,6 +870,7 @@ export async function updateWarehouse(
   companyId: string,
   warehouseId: string,
   input: { code?: string; name?: string; location?: string | null },
+  actor: TrustedMutationActor,
   databaseClient: PrismaClient = prisma,
   transactionOptions: CompanyMutationOptions = {},
 ) {
@@ -831,7 +883,7 @@ export async function updateWarehouse(
         select: { id: true },
       });
       if (!warehouse) throw new NotFoundError('Warehouse not found');
-      return databaseTransaction.warehouse.update({
+      const updatedWarehouse = await databaseTransaction.warehouse.update({
         where: { id: warehouseId, companyId },
         data: {
           ...(input.code !== undefined
@@ -845,6 +897,18 @@ export async function updateWarehouse(
             : {}),
         },
       });
+      await recordMutationAuditEvent(
+        databaseTransaction,
+        companyId,
+        actor,
+        {
+          action: 'warehouse.updated',
+          resourceType: 'warehouse',
+          resourceId: updatedWarehouse.id,
+        },
+        transactionOptions.auditHooks,
+      );
+      return updatedWarehouse;
     },
     transactionOptions,
   );
@@ -853,6 +917,7 @@ export async function updateWarehouse(
 export async function deactivateWarehouse(
   companyId: string,
   warehouseId: string,
+  actor: TrustedMutationActor,
   databaseClient: PrismaClient = prisma,
   transactionOptions: CompanyMutationOptions = {},
 ) {
@@ -877,10 +942,22 @@ export async function deactivateWarehouse(
           'Warehouse with on-hand inventory cannot be deactivated',
           'WAREHOUSE_HAS_STOCK',
         );
-      return databaseTransaction.warehouse.update({
+      const deactivatedWarehouse = await databaseTransaction.warehouse.update({
         where: { id: warehouseId, companyId },
         data: { active: false },
       });
+      await recordMutationAuditEvent(
+        databaseTransaction,
+        companyId,
+        actor,
+        {
+          action: 'warehouse.deactivated',
+          resourceType: 'warehouse',
+          resourceId: deactivatedWarehouse.id,
+        },
+        transactionOptions.auditHooks,
+      );
+      return deactivatedWarehouse;
     },
     transactionOptions,
   );
@@ -890,7 +967,9 @@ export async function updateSafetyQuantity(
   companyId: string,
   inventoryBalanceId: string,
   safetyQuantityValue: Quantity,
+  actor: TrustedMutationActor,
   databaseClient: PrismaClient = prisma,
+  transactionOptions: CompanyMutationOptions = {},
 ) {
   let safetyQuantity: Prisma.Decimal;
   try {
@@ -908,15 +987,72 @@ export async function updateSafetyQuantity(
       'INVALID_SAFETY_QUANTITY',
     );
   }
-  const inventoryBalance = await databaseClient.inventoryBalance.findFirst({
-    where: { id: inventoryBalanceId, companyId },
-    select: { id: true },
-  });
-  if (!inventoryBalance) throw new NotFoundError('Inventory balance not found');
-  return databaseClient.inventoryBalance.update({
-    where: { id: inventoryBalanceId, companyId },
-    data: { safetyQuantity },
-  });
+  return withCompanyMutationTransaction(
+    companyId,
+    databaseClient,
+    async (databaseTransaction) => {
+      const inventoryBalance = await databaseTransaction.inventoryBalance.findFirst({
+        where: { id: inventoryBalanceId, companyId },
+        select: { id: true },
+      });
+      if (!inventoryBalance)
+        throw new NotFoundError('Inventory balance not found');
+      const updatedBalance = await databaseTransaction.inventoryBalance.update({
+        where: { id: inventoryBalanceId, companyId },
+        data: { safetyQuantity },
+      });
+      await recordMutationAuditEvent(
+        databaseTransaction,
+        companyId,
+        actor,
+        {
+          action: 'inventory.safety_quantity_updated',
+          resourceType: 'inventory_balance',
+          resourceId: updatedBalance.id,
+        },
+        transactionOptions.auditHooks,
+      );
+      return updatedBalance;
+    },
+    transactionOptions,
+  );
+}
+
+export async function activateWarehouse(
+  companyId: string,
+  warehouseId: string,
+  actor: TrustedMutationActor,
+  databaseClient: PrismaClient = prisma,
+  transactionOptions: CompanyMutationOptions = {},
+) {
+  return withCompanyMutationTransaction(
+    companyId,
+    databaseClient,
+    async (databaseTransaction) => {
+      const warehouse = await databaseTransaction.warehouse.findFirst({
+        where: { id: warehouseId, companyId },
+        select: { id: true },
+      });
+      if (!warehouse) throw new NotFoundError('Warehouse not found');
+      const activatedWarehouse = await databaseTransaction.warehouse.update({
+        where: { id: warehouseId, companyId },
+        data: { active: true },
+      });
+      await recordMutationAuditEvent(
+        databaseTransaction,
+        companyId,
+        actor,
+        {
+          action: 'warehouse.activated',
+          resourceType: 'warehouse',
+          resourceId: activatedWarehouse.id,
+        },
+        transactionOptions.auditHooks,
+      );
+      return activatedWarehouse;
+    },
+    transactionOptions,
+  );
 }
 
 export type PostedInventoryTransaction = InventoryTransaction & {

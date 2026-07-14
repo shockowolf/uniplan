@@ -1,5 +1,6 @@
 import { Prisma, type PrismaClient } from '@prisma/client';
 import { ConflictError } from '@/lib/domain/errors';
+import type { AuditWriteHooks } from '@/lib/audit/service.server';
 
 const DEFAULT_MAX_ATTEMPTS = 4;
 const MAX_MAX_ATTEMPTS = 6;
@@ -12,6 +13,7 @@ export type CompanyMutationHooks = {
 export type CompanyMutationOptions = {
   maxAttempts?: number;
   hooks?: CompanyMutationHooks;
+  auditHooks?: AuditWriteHooks;
 };
 
 export class ConcurrentMutationError extends ConflictError {

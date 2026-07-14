@@ -1,6 +1,10 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { Prisma, type PrismaClient } from '@prisma/client';
 import { prisma } from '@/lib/db';
+import {
+  recordAuditEvent,
+  type AuditWriteHooks,
+} from '@/lib/audit/service.server';
 
 export const SESSION_COOKIE_NAME = 'uniplan_session';
 export const DEFAULT_SESSION_TTL_SECONDS = 8 * 60 * 60;
@@ -194,4 +198,37 @@ export async function revokeSessionToken(
     data: { revokedAt },
   });
   return result.count > 0;
+}
+
+export async function revokeSessionWithAudit(
+  token: string,
+  databaseClient: PrismaClient = prisma,
+  revokedAt = new Date(),
+  auditHooks: AuditWriteHooks = {},
+) {
+  if (!isValidSessionToken(token)) return false;
+  return databaseClient.$transaction(async (transaction) => {
+    const sessionContext = await resolveSessionToken(
+      token,
+      transaction,
+      revokedAt,
+    );
+    if (!sessionContext) return false;
+    const revoked = await revokeSessionToken(token, transaction, revokedAt);
+    if (!revoked) return false;
+    await recordAuditEvent(
+      transaction,
+      {
+        companyId: sessionContext.companyId,
+        actorUserId: sessionContext.userId,
+      },
+      {
+        action: 'auth.logout',
+        resourceType: 'auth_session',
+        resourceId: sessionContext.sessionId,
+      },
+      auditHooks,
+    );
+    return true;
+  });
 }

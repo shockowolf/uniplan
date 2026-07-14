@@ -250,6 +250,15 @@ export type QueryTemplate = {
 - 이 보수적 프로토콜은 같은 회사의 관련 쓰기를 직렬화한다. 현재 MVP의 정확성 우선 선택이며, 쓰기 처리량이 병목이 되면 동일한 순서를 보존하는 세분화된 키로 후속 분할한다.
 - 재고 idempotency hash는 검증된 명령의 표준 표현을 사용한다. Decimal은 최소 표준 문자열, 텍스트는 저장 규칙과 같은 trim/null 규칙, 시간은 ISO, 논리 라인은 정렬한다. `createdById`는 불변 헤더에 저장되므로 operation identity에 포함한다.
 
+### U10 트랜잭션 감사 경계
+
+- `AuditEvent`는 회사 소유 append-only 원장이다. `(companyId, actorUserId)` 복합 외래 키로 행위자의 테넌트를 검증하고 PostgreSQL 트리거가 UPDATE/DELETE를 거부한다.
+- 품목·분류·창고·BOM·재고·내비게이션 성공 이벤트는 해당 U9 Serializable 회사 트랜잭션 안에서 기록한다. 감사 기록 실패는 업무 변경도 롤백한다.
+- 업무 actor는 요청 JSON이나 헤더에서 받지 않고 실제 세션에서 만든 서버 전용 context로 서비스 경계까지 전달한다. 재고 `createdById`도 같은 context에서만 파생한다.
+- 인증 실패처럼 업무 변경이 없는 이벤트는 별도의 짧은 트랜잭션에 기록한다. 로그인 회사/이메일 원문 대신 운영 필수 `UNIPLAN_AUDIT_HMAC_SECRET`으로 만든 subject bucket만 저장한다.
+- 감사 metadata는 action별 키 allow-list, 깊이·키 수·배열·문자열·직렬화 크기 제한을 모두 통과해야 한다. 이메일, 회사 코드, 이름, 비밀번호, 토큰, 쿠키, 요청 본문, 고객/연락처/메모/예외 stack 계열 키는 거부한다.
+- `/api/system/audit`는 실제 세션과 `system.audit` read 권한을 요구하며 회사 범위, 제한된 필터, newest-first cursor, allow-list DTO, `private, no-store`/`Vary: Cookie`를 강제한다.
+
 ## 9. 데모 데이터 전략
 
 MVP seed는 실제 easierp 데이터를 직접 넣지 않고, 다음 도메인의 가짜 데이터를 생성한다.

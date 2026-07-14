@@ -1,6 +1,10 @@
 import { Prisma, type PrismaClient } from '@prisma/client';
 import { prisma } from '@/lib/db';
 import {
+  recordMutationAuditEvent,
+  type TrustedMutationActor,
+} from '@/lib/audit/service.server';
+import {
   type CompanyMutationOptions,
   withCompanyMutationTransaction,
 } from '@/lib/domain/concurrency';
@@ -86,7 +90,7 @@ async function requireValidParent(
 
 export async function createNavigationMenuItem(
   companyId: string,
-  administratorUserId: string,
+  actor: TrustedMutationActor,
   input: NavigationMenuInput,
   databaseClient: PrismaClient = prisma,
   transactionOptions: CompanyMutationOptions = {},
@@ -116,7 +120,7 @@ export async function createNavigationMenuItem(
         where: {
           companyId,
           active: true,
-          userRoles: { some: { userId: administratorUserId } },
+          userRoles: { some: { userId: actor.actorUserId } },
           permissions: {
             some: {
               canAdmin: true,
@@ -144,6 +148,17 @@ export async function createNavigationMenuItem(
           canAdmin: true,
         })),
       });
+      await recordMutationAuditEvent(
+        databaseTransaction,
+        companyId,
+        actor,
+        {
+          action: 'navigation.created',
+          resourceType: 'navigation',
+          resourceId: menuItem.id,
+        },
+        transactionOptions.auditHooks,
+      );
       return menuItem;
     },
     transactionOptions,
@@ -154,6 +169,7 @@ export async function updateNavigationMenuItem(
   companyId: string,
   menuItemId: string,
   input: Partial<NavigationMenuInput>,
+  actor: TrustedMutationActor,
   databaseClient: PrismaClient = prisma,
   transactionOptions: CompanyMutationOptions = {},
 ) {
@@ -175,7 +191,7 @@ export async function updateNavigationMenuItem(
           databaseTransaction,
         );
       }
-      return databaseTransaction.menuItem.update({
+      const menuItem = await databaseTransaction.menuItem.update({
         where: { id: menuItemId, companyId },
         data: {
           ...(input.code !== undefined
@@ -196,6 +212,21 @@ export async function updateNavigationMenuItem(
             : {}),
         },
       });
+      await recordMutationAuditEvent(
+        databaseTransaction,
+        companyId,
+        actor,
+        {
+          action:
+            input.parentId !== undefined
+              ? 'navigation.reparented'
+              : 'navigation.updated',
+          resourceType: 'navigation',
+          resourceId: menuItem.id,
+        },
+        transactionOptions.auditHooks,
+      );
+      return menuItem;
     },
     transactionOptions,
   );
@@ -204,6 +235,7 @@ export async function updateNavigationMenuItem(
 export async function deactivateNavigationMenuItem(
   companyId: string,
   menuItemId: string,
+  actor: TrustedMutationActor,
   databaseClient: PrismaClient = prisma,
   transactionOptions: CompanyMutationOptions = {},
 ) {
@@ -226,10 +258,66 @@ export async function deactivateNavigationMenuItem(
           'NAVIGATION_HAS_CHILDREN',
         );
       }
-      return databaseTransaction.menuItem.update({
+      const menuItem = await databaseTransaction.menuItem.update({
         where: { id: menuItemId, companyId },
         data: { active: false },
       });
+      await recordMutationAuditEvent(
+        databaseTransaction,
+        companyId,
+        actor,
+        {
+          action: 'navigation.deactivated',
+          resourceType: 'navigation',
+          resourceId: menuItem.id,
+        },
+        transactionOptions.auditHooks,
+      );
+      return menuItem;
+    },
+    transactionOptions,
+  );
+}
+
+export async function activateNavigationMenuItem(
+  companyId: string,
+  menuItemId: string,
+  actor: TrustedMutationActor,
+  databaseClient: PrismaClient = prisma,
+  transactionOptions: CompanyMutationOptions = {},
+) {
+  return withCompanyMutationTransaction(
+    companyId,
+    databaseClient,
+    async (databaseTransaction) => {
+      const existingMenuItem = await databaseTransaction.menuItem.findFirst({
+        where: { id: menuItemId, companyId },
+        select: { id: true, parentId: true },
+      });
+      if (!existingMenuItem)
+        throw new NotFoundError('Navigation item not found');
+      await requireValidParent(
+        companyId,
+        menuItemId,
+        existingMenuItem.parentId,
+        databaseTransaction,
+      );
+      const menuItem = await databaseTransaction.menuItem.update({
+        where: { id: menuItemId, companyId },
+        data: { active: true },
+      });
+      await recordMutationAuditEvent(
+        databaseTransaction,
+        companyId,
+        actor,
+        {
+          action: 'navigation.activated',
+          resourceType: 'navigation',
+          resourceId: menuItem.id,
+        },
+        transactionOptions.auditHooks,
+      );
+      return menuItem;
     },
     transactionOptions,
   );

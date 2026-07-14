@@ -1,9 +1,18 @@
 import { createSessionCookie } from '@/lib/auth/cookie';
-import { loginWithPassword } from '@/lib/auth/login';
+import {
+  loginWithPassword,
+  resolveLoginAuditCompanyId,
+} from '@/lib/auth/login';
 import { readBoundedLoginJson } from '@/lib/auth/login-body';
 import { isSameOriginRequest } from '@/lib/auth/origin';
 import { consumeLoginAttempt } from '@/lib/auth/rate-limit';
 import { authenticatedJsonResponse } from '@/lib/api/responses';
+import {
+  loginSubjectMaterial,
+  recordStandaloneAuditEvent,
+  systemAuditContext,
+} from '@/lib/audit/service.server';
+import { AuditOutcome } from '@prisma/client';
 
 const genericLoginError = {
   error: {
@@ -66,7 +75,24 @@ export async function POST(request: Request) {
 
   try {
     const limiterResult = await consumeLoginAttempt(credentials);
+    const auditCompanyId = await resolveLoginAuditCompanyId(
+      credentials.companyCode,
+    );
     if (!limiterResult.allowed) {
+      if (auditCompanyId) {
+        await recordStandaloneAuditEvent(
+          systemAuditContext(auditCompanyId),
+          {
+            action: 'auth.login.rate_limited',
+            resourceType: 'authentication',
+            outcome: AuditOutcome.DENIED,
+            subjectMaterial: loginSubjectMaterial(
+              credentials.companyCode,
+              credentials.email,
+            ),
+          },
+        );
+      }
       return authenticatedJsonResponse(
         {
           error: {
@@ -87,6 +113,20 @@ export async function POST(request: Request) {
       identityBucketKey: limiterResult.identityBucketKey,
     });
     if (!loginResult) {
+      if (auditCompanyId) {
+        await recordStandaloneAuditEvent(
+          systemAuditContext(auditCompanyId),
+          {
+            action: 'auth.login',
+            resourceType: 'authentication',
+            outcome: AuditOutcome.DENIED,
+            subjectMaterial: loginSubjectMaterial(
+              credentials.companyCode,
+              credentials.email,
+            ),
+          },
+        );
+      }
       return authenticatedJsonResponse(genericLoginError, { status: 401 });
     }
 

@@ -6,6 +6,10 @@ import {
 } from '@prisma/client';
 import { prisma } from '@/lib/db';
 import {
+  recordMutationAuditEvent,
+  type TrustedMutationActor,
+} from '@/lib/audit/service.server';
+import {
   type CompanyMutationOptions,
   withCompanyMutationTransaction,
 } from '@/lib/domain/concurrency';
@@ -80,6 +84,7 @@ export async function createBom(
     outputItemId: string;
     notes?: string | null;
   },
+  actor: TrustedMutationActor,
   databaseClient: PrismaClient = prisma,
   transactionOptions: CompanyMutationOptions = {},
 ) {
@@ -106,7 +111,7 @@ export async function createBom(
         );
       }
 
-      return databaseTransaction.bom.create({
+      const bom = await databaseTransaction.bom.create({
         data: {
           companyId,
           code: requiredText(input.code, 'code'),
@@ -121,6 +126,14 @@ export async function createBom(
         },
         include: { versions: true },
       });
+      await recordMutationAuditEvent(
+        databaseTransaction,
+        companyId,
+        actor,
+        { action: 'bom.created', resourceType: 'bom', resourceId: bom.id },
+        transactionOptions.auditHooks,
+      );
+      return bom;
     },
     transactionOptions,
   );
@@ -130,6 +143,7 @@ export async function updateBom(
   companyId: string,
   bomId: string,
   input: { code?: string; name?: string },
+  actor: TrustedMutationActor,
   databaseClient: PrismaClient = prisma,
   transactionOptions: CompanyMutationOptions = {},
 ) {
@@ -148,13 +162,21 @@ export async function updateBom(
         throw new ValidationError('code is required');
       if (input.name !== undefined && !normalizedName)
         throw new ValidationError('name is required');
-      return databaseTransaction.bom.update({
+      const bom = await databaseTransaction.bom.update({
         where: { id: bomId, companyId },
         data: {
           ...(normalizedCode ? { code: normalizedCode } : {}),
           ...(normalizedName ? { name: normalizedName } : {}),
         },
       });
+      await recordMutationAuditEvent(
+        databaseTransaction,
+        companyId,
+        actor,
+        { action: 'bom.updated', resourceType: 'bom', resourceId: bom.id },
+        transactionOptions.auditHooks,
+      );
+      return bom;
     },
     transactionOptions,
   );
@@ -163,6 +185,7 @@ export async function updateBom(
 export async function deactivateBom(
   companyId: string,
   bomId: string,
+  actor: TrustedMutationActor,
   databaseClient: PrismaClient = prisma,
   transactionOptions: CompanyMutationOptions = {},
 ) {
@@ -188,10 +211,18 @@ export async function deactivateBom(
           'BOM_HAS_ACTIVE_REVISION',
         );
       }
-      return databaseTransaction.bom.update({
+      const bom = await databaseTransaction.bom.update({
         where: { id: bomId, companyId },
         data: { active: false },
       });
+      await recordMutationAuditEvent(
+        databaseTransaction,
+        companyId,
+        actor,
+        { action: 'bom.deactivated', resourceType: 'bom', resourceId: bom.id },
+        transactionOptions.auditHooks,
+      );
+      return bom;
     },
     transactionOptions,
   );
@@ -200,6 +231,7 @@ export async function deactivateBom(
 export async function createDraftBomRevision(
   companyId: string,
   bomId: string,
+  actor: TrustedMutationActor,
   notes?: string | null,
   databaseClient: PrismaClient = prisma,
   transactionOptions: CompanyMutationOptions = {},
@@ -230,7 +262,7 @@ export async function createDraftBomRevision(
           _max: { revision: true },
         });
       const sourceActiveBomVersion = bomRecord.versions[0];
-      return databaseTransaction.bomVersion.create({
+      const bomVersion = await databaseTransaction.bomVersion.create({
         data: {
           companyId,
           bomId,
@@ -248,6 +280,18 @@ export async function createDraftBomRevision(
         },
         include: { components: true },
       });
+      await recordMutationAuditEvent(
+        databaseTransaction,
+        companyId,
+        actor,
+        {
+          action: 'bom_revision.created',
+          resourceType: 'bom_revision',
+          resourceId: bomVersion.id,
+        },
+        transactionOptions.auditHooks,
+      );
+      return bomVersion;
     },
     transactionOptions,
   );
@@ -257,6 +301,7 @@ export async function replaceDraftBomComponents(
   companyId: string,
   bomVersionId: string,
   componentInputs: ComponentInput[],
+  actor: TrustedMutationActor,
   databaseClient: PrismaClient = prisma,
   transactionOptions: CompanyMutationOptions = {},
 ) {
@@ -335,10 +380,22 @@ export async function replaceDraftBomComponents(
       await databaseTransaction.bomComponent.createMany({
         data: componentRecords,
       });
-      return databaseTransaction.bomVersion.findUniqueOrThrow({
+      const bomVersion = await databaseTransaction.bomVersion.findUniqueOrThrow({
         where: { id: bomVersionId },
         include: { components: { include: { componentItem: true } } },
       });
+      await recordMutationAuditEvent(
+        databaseTransaction,
+        companyId,
+        actor,
+        {
+          action: 'bom_revision.components_replaced',
+          resourceType: 'bom_revision',
+          resourceId: bomVersion.id,
+        },
+        transactionOptions.auditHooks,
+      );
+      return bomVersion;
     },
     transactionOptions,
   );
@@ -415,6 +472,7 @@ async function assertNoBomCycle(
 export async function activateBomRevision(
   companyId: string,
   bomVersionId: string,
+  actor: TrustedMutationActor,
   databaseClient: PrismaClient = prisma,
   transactionOptions: CompanyMutationOptions = {},
 ) {
@@ -534,7 +592,7 @@ export async function activateBomRevision(
         },
         data: { status: BomVersionStatus.RETIRED, retiredAt: activationTime },
       });
-      return databaseTransaction.bomVersion.update({
+      const activatedBomVersion = await databaseTransaction.bomVersion.update({
         where: { id: selectedBomVersion.id },
         data: { status: BomVersionStatus.ACTIVE, activatedAt: activationTime },
         include: {
@@ -542,6 +600,18 @@ export async function activateBomRevision(
           components: { include: { componentItem: true } },
         },
       });
+      await recordMutationAuditEvent(
+        databaseTransaction,
+        companyId,
+        actor,
+        {
+          action: 'bom_revision.activated',
+          resourceType: 'bom_revision',
+          resourceId: activatedBomVersion.id,
+        },
+        transactionOptions.auditHooks,
+      );
+      return activatedBomVersion;
     },
     transactionOptions,
   );
@@ -550,6 +620,7 @@ export async function activateBomRevision(
 export async function retireBomRevision(
   companyId: string,
   bomVersionId: string,
+  actor: TrustedMutationActor,
   databaseClient: PrismaClient = prisma,
   transactionOptions: CompanyMutationOptions = {},
 ) {
@@ -568,10 +639,70 @@ export async function retireBomRevision(
           'BOM_NOT_ACTIVE',
         );
       }
-      return databaseTransaction.bomVersion.update({
+      const retiredBomVersion = await databaseTransaction.bomVersion.update({
         where: { id: bomVersionId },
         data: { status: BomVersionStatus.RETIRED, retiredAt: new Date() },
       });
+      await recordMutationAuditEvent(
+        databaseTransaction,
+        companyId,
+        actor,
+        {
+          action: 'bom_revision.retired',
+          resourceType: 'bom_revision',
+          resourceId: retiredBomVersion.id,
+        },
+        transactionOptions.auditHooks,
+      );
+      return retiredBomVersion;
+    },
+    transactionOptions,
+  );
+}
+
+export async function activateBom(
+  companyId: string,
+  bomId: string,
+  actor: TrustedMutationActor,
+  databaseClient: PrismaClient = prisma,
+  transactionOptions: CompanyMutationOptions = {},
+) {
+  return withCompanyMutationTransaction(
+    companyId,
+    databaseClient,
+    async (databaseTransaction) => {
+      const existingBom = await databaseTransaction.bom.findFirst({
+        where: { id: bomId, companyId },
+        select: {
+          id: true,
+          outputItem: {
+            select: { active: true, itemType: true, trackInventory: true },
+          },
+        },
+      });
+      if (!existingBom) throw new NotFoundError('BOM not found');
+      if (
+        !existingBom.outputItem.active ||
+        !existingBom.outputItem.trackInventory ||
+        existingBom.outputItem.itemType === ItemType.SERVICE
+      ) {
+        throw new ValidationError(
+          'BOM output must be active and inventory tracked',
+          'INVALID_BOM_OUTPUT',
+        );
+      }
+      const bom = await databaseTransaction.bom.update({
+        where: { id: bomId, companyId },
+        data: { active: true },
+      });
+      await recordMutationAuditEvent(
+        databaseTransaction,
+        companyId,
+        actor,
+        { action: 'bom.activated', resourceType: 'bom', resourceId: bom.id },
+        transactionOptions.auditHooks,
+      );
+      return bom;
     },
     transactionOptions,
   );

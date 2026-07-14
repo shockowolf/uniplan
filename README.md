@@ -19,6 +19,8 @@ This repository now contains both:
 - LLM-ready intent classifier shell
 - No free-form SQL execution
 - Read-only AI analysis flow
+- Transactional tenant-scoped append-only audit events for authentication and critical mutations
+- Permission-gated read-only `/api/system/audit` cursor API
 
 ## Run
 
@@ -67,6 +69,8 @@ npm run auth:set-password -- --company COMPANY_CODE --email user@example.com
 ```
 
 The command reads the password without echoing it and revokes the user's existing sessions. Session duration is configured with `UNIPLAN_AUTH_SESSION_TTL_SECONDS` (default 8 hours, maximum 30 days). Production requires `UNIPLAN_APP_ORIGIN` to be one explicit HTTPS origin. Set a private `UNIPLAN_AUTH_RATE_LIMIT_SECRET` to HMAC login limiter keys (without it, opaque SHA-256 keys are used), and schedule `npm run auth:cleanup` externally to remove expired limiter buckets and retained expired/revoked sessions. `UNIPLAN_AUTH_RECORD_RETENTION_DAYS` defaults to 7 days. Legacy demo authorization is opt-in for local development with `UNIPLAN_DEMO_AUTH_ENABLED=true` and is always disabled when `NODE_ENV=production`.
+
+Production also requires an independently managed `UNIPLAN_AUDIT_HMAC_SECRET` of at least 32 bytes. It HMACs audit subject, correlation, and idempotency buckets; raw login identifiers and idempotency keys are never stored in audit rows. Audit reads require a real session with the dedicated `system.audit` read permission.
 
 ## Start Here
 

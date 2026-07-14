@@ -25,6 +25,7 @@ import {
 } from '@/lib/domain/inventory';
 import { deferred, remainsBlocked } from './helpers/barrier';
 import {
+  testAuditActor,
   createTestCompany,
   resetTestDatabase,
   testDatabaseClient,
@@ -39,12 +40,12 @@ describe('U9 forced domain interleavings', () => {
     const item = await createItem(
       company.id,
       { code: 'ITEM', name: 'Item', itemType: ItemType.RAW_MATERIAL },
-      testDatabaseClient,
+      testAuditActor(company.id), testDatabaseClient,
     );
     const warehouse = await createWarehouse(
       company.id,
       { code: 'MAIN', name: 'Main' },
-      testDatabaseClient,
+      testAuditActor(company.id), testDatabaseClient,
     );
     const postingLocked = deferred();
     const releasePosting = deferred();
@@ -55,7 +56,7 @@ describe('U9 forced domain interleavings', () => {
         idempotencyKey: 'forced-posting',
         lines: [{ itemId: item.id, warehouseId: warehouse.id, quantity: '1' }],
       },
-      {
+      testAuditActor(company.id), {
         db: testDatabaseClient,
         hooks: {
           afterLock: async () => {
@@ -71,19 +72,19 @@ describe('U9 forced domain interleavings', () => {
     const itemDeactivation = deactivateItem(
       company.id,
       item.id,
-      testDatabaseClient,
+      testAuditActor(company.id), testDatabaseClient,
       { hooks: { afterLock: async () => itemDeactivationLocked.resolve() } },
     );
     const warehouseDeactivation = deactivateWarehouse(
       company.id,
       warehouse.id,
-      testDatabaseClient,
+      testAuditActor(company.id), testDatabaseClient,
     );
     const semanticUpdate = updateItem(
       company.id,
       item.id,
       { trackInventory: false },
-      testDatabaseClient,
+      testAuditActor(company.id), testDatabaseClient,
     );
     const itemDeactivationResult = expect(
       itemDeactivation,
@@ -113,12 +114,12 @@ describe('U9 forced domain interleavings', () => {
       createItemCategory(
         company.id,
         { code: 'A', name: 'A' },
-        testDatabaseClient,
+        testAuditActor(company.id), testDatabaseClient,
       ),
       createItemCategory(
         company.id,
         { code: 'B', name: 'B' },
-        testDatabaseClient,
+        testAuditActor(company.id), testDatabaseClient,
       ),
     ]);
     const firstCategoryLocked = deferred();
@@ -127,7 +128,7 @@ describe('U9 forced domain interleavings', () => {
       company.id,
       categoryA.id,
       { parentId: categoryB.id },
-      testDatabaseClient,
+      testAuditActor(company.id), testDatabaseClient,
       {
         hooks: {
           afterLock: async () => {
@@ -143,7 +144,7 @@ describe('U9 forced domain interleavings', () => {
       company.id,
       categoryB.id,
       { parentId: categoryA.id },
-      testDatabaseClient,
+      testAuditActor(company.id), testDatabaseClient,
       { hooks: { afterLock: async () => secondCategoryLocked.resolve() } },
     );
     await expect(remainsBlocked(secondCategoryLocked.promise)).resolves.toBe(
@@ -183,7 +184,7 @@ describe('U9 forced domain interleavings', () => {
       company.id,
       menuA.id,
       { parentId: menuB.id },
-      testDatabaseClient,
+      testAuditActor(company.id), testDatabaseClient,
       {
         hooks: {
           afterLock: async () => {
@@ -199,7 +200,7 @@ describe('U9 forced domain interleavings', () => {
       company.id,
       menuB.id,
       { parentId: menuA.id },
-      testDatabaseClient,
+      testAuditActor(company.id), testDatabaseClient,
       { hooks: { afterLock: async () => secondMenuLocked.resolve() } },
     );
     await expect(remainsBlocked(secondMenuLocked.promise)).resolves.toBe(true);
@@ -215,7 +216,7 @@ describe('U9 forced domain interleavings', () => {
     const category = await createItemCategory(
       company.id,
       { code: 'PARENT', name: 'Parent' },
-      testDatabaseClient,
+      testAuditActor(company.id), testDatabaseClient,
     );
     const creationLocked = deferred();
     const releaseCreation = deferred();
@@ -227,7 +228,7 @@ describe('U9 forced domain interleavings', () => {
         itemType: ItemType.RAW_MATERIAL,
         categoryId: category.id,
       },
-      testDatabaseClient,
+      testAuditActor(company.id), testDatabaseClient,
       {
         hooks: {
           afterLock: async () => {
@@ -242,7 +243,7 @@ describe('U9 forced domain interleavings', () => {
     const categoryDeactivation = deactivateItemCategory(
       company.id,
       category.id,
-      testDatabaseClient,
+      testAuditActor(company.id), testDatabaseClient,
       { hooks: { afterLock: async () => deactivationLocked.resolve() } },
     );
     await expect(remainsBlocked(deactivationLocked.promise)).resolves.toBe(
@@ -262,30 +263,30 @@ describe('U9 forced domain interleavings', () => {
     const component = await createItem(
       company.id,
       { code: 'COMP', name: 'Component', itemType: ItemType.RAW_MATERIAL },
-      testDatabaseClient,
+      testAuditActor(company.id), testDatabaseClient,
     );
     const output = await createItem(
       company.id,
       { code: 'OUT', name: 'Output', itemType: ItemType.FINISHED_GOOD },
-      testDatabaseClient,
+      testAuditActor(company.id), testDatabaseClient,
     );
     const bom = await createBom(
       company.id,
       { code: 'BOM', name: 'BOM', outputItemId: output.id },
-      testDatabaseClient,
+      testAuditActor(company.id), testDatabaseClient,
     );
     await replaceDraftBomComponents(
       company.id,
       bom.versions[0].id,
       [{ itemId: component.id, quantity: '1' }],
-      testDatabaseClient,
+      testAuditActor(company.id), testDatabaseClient,
     );
     const activationLocked = deferred();
     const releaseActivation = deferred();
     const activation = activateBomRevision(
       company.id,
       bom.versions[0].id,
-      testDatabaseClient,
+      testAuditActor(company.id), testDatabaseClient,
       {
         hooks: {
           afterLock: async () => {
@@ -300,7 +301,7 @@ describe('U9 forced domain interleavings', () => {
     const componentDeactivation = deactivateItem(
       company.id,
       component.id,
-      testDatabaseClient,
+      testAuditActor(company.id), testDatabaseClient,
       {
         hooks: { afterLock: async () => componentDeactivationLocked.resolve() },
       },
@@ -308,7 +309,7 @@ describe('U9 forced domain interleavings', () => {
     const outputDeactivation = deactivateItem(
       company.id,
       output.id,
-      testDatabaseClient,
+      testAuditActor(company.id), testDatabaseClient,
     );
     const componentDeactivationResult = expect(
       componentDeactivation,
@@ -332,28 +333,28 @@ describe('U9 forced domain interleavings', () => {
     const component = await createItem(
       company.id,
       { code: 'COMP', name: 'Component', itemType: ItemType.RAW_MATERIAL },
-      testDatabaseClient,
+      testAuditActor(company.id), testDatabaseClient,
     );
     const output = await createItem(
       company.id,
       { code: 'OUT', name: 'Output', itemType: ItemType.FINISHED_GOOD },
-      testDatabaseClient,
+      testAuditActor(company.id), testDatabaseClient,
     );
     const bom = await createBom(
       company.id,
       { code: 'BOM', name: 'BOM', outputItemId: output.id },
-      testDatabaseClient,
+      testAuditActor(company.id), testDatabaseClient,
     );
     await replaceDraftBomComponents(
       company.id,
       bom.versions[0].id,
       [{ itemId: component.id, quantity: '1' }],
-      testDatabaseClient,
+      testAuditActor(company.id), testDatabaseClient,
     );
     await activateBomRevision(
       company.id,
       bom.versions[0].id,
-      testDatabaseClient,
+      testAuditActor(company.id), testDatabaseClient,
     );
 
     const allocationLocked = deferred();
@@ -361,7 +362,7 @@ describe('U9 forced domain interleavings', () => {
     const firstAllocation = createDraftBomRevision(
       company.id,
       bom.id,
-      'first',
+      testAuditActor(company.id), 'first',
       testDatabaseClient,
       {
         hooks: {
@@ -377,7 +378,7 @@ describe('U9 forced domain interleavings', () => {
     const secondAllocation = createDraftBomRevision(
       company.id,
       bom.id,
-      'second',
+      testAuditActor(company.id), 'second',
       testDatabaseClient,
       { hooks: { afterLock: async () => secondAllocationLocked.resolve() } },
     );
@@ -398,7 +399,7 @@ describe('U9 forced domain interleavings', () => {
     const firstActivation = activateBomRevision(
       company.id,
       revisionTwo.id,
-      testDatabaseClient,
+      testAuditActor(company.id), testDatabaseClient,
       {
         hooks: {
           afterLock: async () => {
@@ -413,7 +414,7 @@ describe('U9 forced domain interleavings', () => {
     const staleActivation = activateBomRevision(
       company.id,
       revisionThree.id,
-      testDatabaseClient,
+      testAuditActor(company.id), testDatabaseClient,
       { hooks: { afterLock: async () => secondActivationLocked.resolve() } },
     );
     await expect(remainsBlocked(secondActivationLocked.promise)).resolves.toBe(
@@ -443,17 +444,17 @@ describe('U9 forced domain interleavings', () => {
       createItem(
         company.id,
         { code: 'A', name: 'A', itemType: ItemType.RAW_MATERIAL },
-        testDatabaseClient,
+        testAuditActor(company.id), testDatabaseClient,
       ),
       createItem(
         company.id,
         { code: 'B', name: 'B', itemType: ItemType.RAW_MATERIAL },
-        testDatabaseClient,
+        testAuditActor(company.id), testDatabaseClient,
       ),
       createWarehouse(
         company.id,
         { code: 'MAIN', name: 'Main' },
-        testDatabaseClient,
+        testAuditActor(company.id), testDatabaseClient,
       ),
     ]);
     const first = await postInventoryTransaction(
@@ -469,7 +470,7 @@ describe('U9 forced domain interleavings', () => {
           { itemId: itemB.id, warehouseId: warehouse.id, quantity: '3.000' },
         ],
       },
-      { db: testDatabaseClient },
+      testAuditActor(company.id), { db: testDatabaseClient },
     );
     const lostAcknowledgementReplay = await postInventoryTransaction(
       company.id,
@@ -484,7 +485,7 @@ describe('U9 forced domain interleavings', () => {
           { itemId: itemA.id, warehouseId: warehouse.id, quantity: '2.000000' },
         ],
       },
-      { db: testDatabaseClient },
+      testAuditActor(company.id), { db: testDatabaseClient },
     );
     expect(lostAcknowledgementReplay.id).toBe(first.id);
 
@@ -498,7 +499,7 @@ describe('U9 forced domain interleavings', () => {
     const firstParallel = postInventoryTransaction(
       company.id,
       parallelPayload,
-      {
+      testAuditActor(company.id), {
         db: testDatabaseClient,
         hooks: {
           afterLock: async () => {
@@ -518,7 +519,7 @@ describe('U9 forced domain interleavings', () => {
           { itemId: itemA.id, warehouseId: warehouse.id, quantity: '1.000' },
         ],
       },
-      {
+      testAuditActor(company.id), {
         db: testDatabaseClient,
         hooks: { afterLock: async () => secondParallelLocked.resolve() },
       },
@@ -542,7 +543,7 @@ describe('U9 forced domain interleavings', () => {
         idempotencyKey: 'parallel-conflict',
         lines: [{ itemId: itemA.id, warehouseId: warehouse.id, quantity: '1' }],
       },
-      {
+      testAuditActor(company.id), {
         db: testDatabaseClient,
         hooks: {
           afterLock: async () => {
@@ -560,7 +561,7 @@ describe('U9 forced domain interleavings', () => {
         idempotencyKey: 'parallel-conflict',
         lines: [{ itemId: itemA.id, warehouseId: warehouse.id, quantity: '2' }],
       },
-      { db: testDatabaseClient },
+      testAuditActor(company.id), { db: testDatabaseClient },
     );
     releaseConflict.resolve();
     await expect(conflictWinner).resolves.toMatchObject({
@@ -576,27 +577,27 @@ describe('U9 forced domain interleavings', () => {
     const component = await createItem(
       company.id,
       { code: 'COMP', name: 'Component', itemType: ItemType.RAW_MATERIAL },
-      testDatabaseClient,
+      testAuditActor(company.id), testDatabaseClient,
     );
     const output = await createItem(
       company.id,
       { code: 'OUT', name: 'Output', itemType: ItemType.FINISHED_GOOD },
-      testDatabaseClient,
+      testAuditActor(company.id), testDatabaseClient,
     );
     const bom = await createBom(
       company.id,
       { code: 'BOM', name: 'BOM', outputItemId: output.id },
-      testDatabaseClient,
+      testAuditActor(company.id), testDatabaseClient,
     );
     await replaceDraftBomComponents(
       company.id,
       bom.versions[0].id,
       [{ itemId: component.id, quantity: '1' }],
-      testDatabaseClient,
+      testAuditActor(company.id), testDatabaseClient,
     );
-    await deactivateItem(company.id, component.id, testDatabaseClient);
+    await deactivateItem(company.id, component.id, testAuditActor(company.id), testDatabaseClient);
     await expect(
-      activateBomRevision(company.id, bom.versions[0].id, testDatabaseClient),
+      activateBomRevision(company.id, bom.versions[0].id, testAuditActor(company.id), testDatabaseClient),
     ).rejects.toMatchObject({ code: 'INVALID_BOM_COMPONENT' });
     await expect(
       testDatabaseClient.bomVersion.findUniqueOrThrow({
@@ -612,9 +613,9 @@ describe('U9 forced domain interleavings', () => {
       where: { id: component.id },
       data: { active: true },
     });
-    await deactivateItem(company.id, output.id, testDatabaseClient);
+    await deactivateItem(company.id, output.id, testAuditActor(company.id), testDatabaseClient);
     await expect(
-      activateBomRevision(company.id, bom.versions[0].id, testDatabaseClient),
+      activateBomRevision(company.id, bom.versions[0].id, testAuditActor(company.id), testDatabaseClient),
     ).rejects.toMatchObject({ code: 'INVALID_BOM_OUTPUT' });
 
     await testDatabaseClient.item.update({
@@ -626,7 +627,7 @@ describe('U9 forced domain interleavings', () => {
       data: { active: false },
     });
     await expect(
-      activateBomRevision(company.id, bom.versions[0].id, testDatabaseClient),
+      activateBomRevision(company.id, bom.versions[0].id, testAuditActor(company.id), testDatabaseClient),
     ).rejects.toMatchObject({ code: 'BOM_INACTIVE' });
   });
 
@@ -652,7 +653,7 @@ describe('U9 forced domain interleavings', () => {
       },
     });
     await expect(
-      deactivateNavigationMenuItem(company.id, parent.id, testDatabaseClient),
+      deactivateNavigationMenuItem(company.id, parent.id, testAuditActor(company.id), testDatabaseClient),
     ).rejects.toMatchObject({ code: 'NAVIGATION_HAS_CHILDREN' });
     await expect(
       testDatabaseClient.menuItem.findUniqueOrThrow({

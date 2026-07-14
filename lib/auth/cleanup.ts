@@ -1,8 +1,13 @@
 import type { PrismaClient } from '@prisma/client';
 import { prisma } from '@/lib/db';
+import {
+  recordAuditEvent,
+  systemAuditContext,
+} from '@/lib/audit/service.server';
 
 export const DEFAULT_AUTH_RECORD_RETENTION_DAYS = 7;
 export const MAX_AUTH_RECORD_RETENTION_DAYS = 365;
+const MAX_CLEANUP_AUDIT_TENANTS = 1_000;
 
 export function getAuthRecordRetentionDays(
   configuredValue = process.env.UNIPLAN_AUTH_RECORD_RETENTION_DAYS,
@@ -44,22 +49,57 @@ export async function cleanupAuthenticationState(
     now.getTime() - retentionDays * 24 * 60 * 60 * 1_000,
   );
 
-  const [deletedBuckets, deletedSessions] = await databaseClient.$transaction([
-    databaseClient.loginRateLimitBucket.deleteMany({
-      where: { windowExpiresAt: { lte: now } },
-    }),
-    databaseClient.authSession.deleteMany({
+  return databaseClient.$transaction(async (transaction) => {
+    const companies = await transaction.company.findMany({
+      select: { id: true },
+      orderBy: { id: 'asc' },
+      take: MAX_CLEANUP_AUDIT_TENANTS + 1,
+    });
+    if (companies.length > MAX_CLEANUP_AUDIT_TENANTS) {
+      throw new Error('Authentication cleanup tenant bound exceeded.');
+    }
+    const sessionsByCompany = await transaction.authSession.groupBy({
+      by: ['companyId'],
       where: {
         OR: [
           { expiresAt: { lte: sessionCutoff } },
           { revokedAt: { lte: sessionCutoff } },
         ],
       },
-    }),
-  ]);
-
-  return {
-    deletedLoginRateLimitBuckets: deletedBuckets.count,
-    deletedAuthSessions: deletedSessions.count,
-  };
+      _count: { _all: true },
+    });
+    const deletedBuckets = await transaction.loginRateLimitBucket.deleteMany({
+      where: { windowExpiresAt: { lte: now } },
+    });
+    const deletedSessions = await transaction.authSession.deleteMany({
+      where: {
+        OR: [
+          { expiresAt: { lte: sessionCutoff } },
+          { revokedAt: { lte: sessionCutoff } },
+        ],
+      },
+    });
+    const deletedSessionCountByCompany = new Map(
+      sessionsByCompany.map((entry) => [entry.companyId, entry._count._all]),
+    );
+    for (const company of companies) {
+      await recordAuditEvent(
+        transaction,
+        systemAuditContext(company.id),
+        {
+          action: 'auth.cleanup',
+          resourceType: 'authentication_state',
+          metadata: {
+            deletedLoginRateLimitBucketCount: deletedBuckets.count,
+            deletedSessionCount:
+              deletedSessionCountByCompany.get(company.id) ?? 0,
+          },
+        },
+      );
+    }
+    return {
+      deletedLoginRateLimitBuckets: deletedBuckets.count,
+      deletedAuthSessions: deletedSessions.count,
+    };
+  });
 }

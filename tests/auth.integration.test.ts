@@ -402,9 +402,11 @@ describe('invite-only database session authentication', () => {
       testDatabaseClient,
     );
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
-    vi.spyOn(prisma.authSession, 'updateMany').mockRejectedValueOnce(
-      new Error('synthetic database outage'),
-    );
+    const transactionSpy = vi.spyOn(prisma, '$transaction');
+    transactionSpy.mockImplementationOnce(() => {
+      transactionSpy.mockRestore();
+      return Promise.reject(new Error('synthetic database outage'));
+    });
 
     const response = await logoutRequest(
       authRequest('/api/auth/logout', {
@@ -421,6 +423,16 @@ describe('invite-only database session authentication', () => {
     await expect(
       resolveSessionToken(loginResult!.token, testDatabaseClient),
     ).resolves.not.toBeNull();
+    await expect(
+      testDatabaseClient.auditEvent.count({
+        where: {
+          companyId: loginResult!.user.companyId,
+          actorUserId: loginResult!.user.id,
+          action: 'auth.logout',
+          outcome: 'FAILED',
+        },
+      }),
+    ).resolves.toBe(1);
   });
 
   it('bounds active sessions and cleans expired authentication state', async () => {

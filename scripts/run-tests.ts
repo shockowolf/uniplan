@@ -3,8 +3,8 @@ import { readFileSync } from 'node:fs';
 
 const DEFAULT_DATABASE_URL =
   'postgresql://uniplan:uniplan_password@127.0.0.1:5433/uniplan_dev?schema=public';
-export const TEST_SCHEMA = 'uniplan_test_u9';
-const TEST_GUARD = 'uniplan_test_u9_only';
+export const TEST_SCHEMA = 'uniplan_test_u10';
+const TEST_GUARD = 'uniplan_test_u10_only';
 
 function databaseUrlFromDotEnv() {
   try {

@@ -47,6 +47,8 @@ const koreanMessageByErrorCode: Record<string, string> = {
   NAVIGATION_CYCLE: '메뉴 계층에 순환이 생길 수 없습니다.',
   NAVIGATION_HAS_CHILDREN: '활성 하위 메뉴가 있는 메뉴는 비활성화할 수 없습니다.',
   NAVIGATION_PERMISSION_MISSING: '새 메뉴 권한을 연결할 관리자 역할이 없습니다.',
+  AUDIT_WRITE_FAILED: '감사 기록을 저장하지 못해 작업이 취소되었습니다.',
+  AUDIT_VALIDATION_FAILED: '감사 기록 검증에 실패해 작업이 취소되었습니다.',
 };
 
 const defaultFieldByErrorCode: Record<string, string> = {

@@ -190,11 +190,13 @@ describe('Task 5 native API boundaries', () => {
         name: 'Stock Item',
         itemType: ItemType.RAW_MATERIAL,
       },
+      { companyId: company.id, actorUserId: user.id },
       testDatabaseClient,
     );
     const warehouse = await createWarehouse(
       company.id,
       { code: 'MAIN', name: 'Main' },
+      { companyId: company.id, actorUserId: user.id },
       testDatabaseClient,
     );
     const postingResponse = await postInventoryRequest(

@@ -9,11 +9,14 @@ import {
   requiredString,
 } from '@/lib/api/responses';
 import { authorizeRequest } from '@/lib/auth/request';
+import { auditContextFromSession } from '@/lib/audit/service.server';
 import { prisma } from '@/lib/db';
 import { ValidationError } from '@/lib/domain/errors';
 import {
   createItem,
   createItemCategory,
+  activateItem,
+  activateItemCategory,
   deactivateItem,
   deactivateItemCategory,
   updateItem,
@@ -63,13 +66,14 @@ export async function POST(request: Request) {
       'create',
     );
     const requestBody = await readJsonObject(request);
+    const actor = auditContextFromSession(sessionContext);
     if (requestBody.kind === 'category') {
       const category = await createItemCategory(sessionContext.companyId, {
         code: requiredString(requestBody.code, 'code'),
         name: requiredString(requestBody.name, 'name'),
         parentId: optionalNullableString(requestBody.parentId),
         description: optionalNullableString(requestBody.description),
-      });
+      }, actor);
       return apiSuccess({ category }, 201);
     }
     const itemType = parseItemType(requestBody.itemType);
@@ -85,7 +89,7 @@ export async function POST(request: Request) {
       taxable: optionalBoolean(requestBody.taxable),
       description: optionalNullableString(requestBody.description),
       memo: optionalNullableString(requestBody.memo),
-    });
+    }, actor);
     return apiSuccess({ item }, 201);
   } catch (requestError) {
     return apiError(requestError);
@@ -106,11 +110,22 @@ export async function PATCH(request: Request) {
     if (!requestBody) throw new Error('Authorized request body is unavailable');
     const itemId = requiredString(requestBody.id, 'id');
     const isDeactivation = requestBody.action === 'deactivate';
+    const isActivation = requestBody.action === 'activate';
+    const actor = auditContextFromSession(sessionContext);
     if (requestBody.kind === 'category') {
       if (isDeactivation) {
         const category = await deactivateItemCategory(
           sessionContext.companyId,
           itemId,
+          actor,
+        );
+        return apiSuccess({ category });
+      }
+      if (isActivation) {
+        const category = await activateItemCategory(
+          sessionContext.companyId,
+          itemId,
+          actor,
         );
         return apiSuccess({ category });
       }
@@ -123,11 +138,20 @@ export async function PATCH(request: Request) {
           parentId: optionalNullableString(requestBody.parentId),
           description: optionalNullableString(requestBody.description),
         },
+        actor,
       );
       return apiSuccess({ category });
     }
     if (isDeactivation) {
-      const item = await deactivateItem(sessionContext.companyId, itemId);
+      const item = await deactivateItem(
+        sessionContext.companyId,
+        itemId,
+        actor,
+      );
+      return apiSuccess({ item });
+    }
+    if (isActivation) {
+      const item = await activateItem(sessionContext.companyId, itemId, actor);
       return apiSuccess({ item });
     }
     const itemType =
@@ -146,7 +170,7 @@ export async function PATCH(request: Request) {
       taxable: optionalBoolean(requestBody.taxable),
       description: optionalNullableString(requestBody.description),
       memo: optionalNullableString(requestBody.memo),
-    });
+    }, actor);
     return apiSuccess({ item });
   } catch (requestError) {
     return apiError(requestError);

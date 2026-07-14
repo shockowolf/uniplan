@@ -10,6 +10,11 @@ import {
   enforceActiveSessionLimit,
 } from '@/lib/auth/session';
 import { prisma } from '@/lib/db';
+import {
+  recordAuditEvent,
+  systemAuditContext,
+  type AuditWriteHooks,
+} from '@/lib/audit/service.server';
 
 const MAX_COMPANY_CODE_LENGTH = 100;
 const MAX_EMAIL_LENGTH = 320;
@@ -49,6 +54,7 @@ export async function loginWithPassword(
     now?: Date;
     ttlSeconds?: number;
     identityBucketKey?: string;
+    auditHooks?: AuditWriteHooks;
   } = {},
 ) {
   const credentials = normalizeLoginCredentials(suppliedCredentials);
@@ -109,6 +115,19 @@ export async function loginWithPassword(
         transaction,
       );
     }
+    await recordAuditEvent(
+      transaction,
+      {
+        companyId: invitedUser.companyId,
+        actorUserId: invitedUser.id,
+      },
+      {
+        action: 'auth.login',
+        resourceType: 'auth_session',
+        resourceId: createdSession.sessionId,
+      },
+      options.auditHooks,
+    );
     return createdSession;
   });
   return {
@@ -139,7 +158,7 @@ export async function setInvitedUserPassword(
         code: { equals: companyCode, mode: 'insensitive' },
       },
     },
-    select: { id: true },
+    select: { id: true, companyId: true },
     take: 2,
   });
   if (matchingUsers.length !== 1) {
@@ -150,15 +169,41 @@ export async function setInvitedUserPassword(
 
   const passwordHash = await hashPassword(input.password);
   const passwordChangedAt = new Date();
-  await databaseClient.$transaction([
-    databaseClient.user.update({
+  const revokedSessionCount = await databaseClient.$transaction(async (transaction) => {
+    await transaction.user.update({
       where: { id: matchingUsers[0].id },
       data: { passwordHash },
-    }),
-    databaseClient.authSession.updateMany({
+    });
+    const revokedSessions = await transaction.authSession.updateMany({
       where: { userId: matchingUsers[0].id, revokedAt: null },
       data: { revokedAt: passwordChangedAt },
-    }),
-  ]);
-  return { userId: matchingUsers[0].id };
+    });
+    await recordAuditEvent(
+      transaction,
+      systemAuditContext(matchingUsers[0].companyId),
+      {
+        action: 'auth.password_reset',
+        resourceType: 'user',
+        resourceId: matchingUsers[0].id,
+        metadata: { revokedSessionCount: revokedSessions.count },
+      },
+    );
+    return revokedSessions.count;
+  });
+  return { userId: matchingUsers[0].id, revokedSessionCount };
+}
+
+export async function resolveLoginAuditCompanyId(
+  companyCode: string,
+  databaseClient: PrismaClient = prisma,
+) {
+  const companies = await databaseClient.company.findMany({
+    where: {
+      code: { equals: companyCode.trim(), mode: 'insensitive' },
+      active: true,
+    },
+    select: { id: true },
+    take: 2,
+  });
+  return companies.length === 1 ? companies[0].id : null;
 }

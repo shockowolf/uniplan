@@ -4,7 +4,15 @@ import {
   authenticatedResponse,
 } from '@/lib/api/responses';
 import { isSameOriginRequest } from '@/lib/auth/origin';
-import { revokeSessionToken } from '@/lib/auth/session';
+import {
+  resolveSessionToken,
+  revokeSessionWithAudit,
+} from '@/lib/auth/session';
+import {
+  recordAuditEvent,
+} from '@/lib/audit/service.server';
+import { AuditOutcome } from '@prisma/client';
+import { prisma } from '@/lib/db';
 
 export async function POST(request: Request) {
   if (!isSameOriginRequest(request)) {
@@ -20,9 +28,32 @@ export async function POST(request: Request) {
   }
 
   const sessionToken = readSessionCookie(request);
+  let sessionContext: Awaited<ReturnType<typeof resolveSessionToken>> = null;
   try {
-    if (sessionToken) await revokeSessionToken(sessionToken);
+    sessionContext = sessionToken
+      ? await resolveSessionToken(sessionToken)
+      : null;
+    if (sessionToken) await revokeSessionWithAudit(sessionToken);
   } catch (requestError) {
+    if (sessionContext) {
+      try {
+        await recordAuditEvent(
+          prisma,
+          {
+            companyId: sessionContext.companyId,
+            actorUserId: sessionContext.userId,
+          },
+          {
+            action: 'auth.logout',
+            resourceType: 'auth_session',
+            resourceId: sessionContext.sessionId,
+            outcome: AuditOutcome.FAILED,
+          },
+        );
+      } catch {
+        // The response still fails closed and clears the browser cookie.
+      }
+    }
     const errorType =
       requestError instanceof Error ? requestError.name : 'UnknownError';
     console.error(`UNIPLAN logout revocation failed (${errorType})`);

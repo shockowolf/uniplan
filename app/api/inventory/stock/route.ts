@@ -5,6 +5,7 @@ import {
   requiredString,
 } from '@/lib/api/responses';
 import { authorizeRequest } from '@/lib/auth/request';
+import { auditContextFromSession } from '@/lib/audit/service.server';
 import { prisma } from '@/lib/db';
 import { ValidationError } from '@/lib/domain/errors';
 import { updateSafetyQuantity } from '@/lib/domain/inventory';
@@ -48,6 +49,7 @@ export async function PATCH(request: Request) {
       sessionContext.companyId,
       requiredString(requestBody.id, 'id'),
       String(requestBody.safetyQuantity),
+      auditContextFromSession(sessionContext),
     );
     return apiSuccess({ inventoryBalance });
   } catch (requestError) {

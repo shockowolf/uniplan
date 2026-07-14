@@ -8,6 +8,7 @@ import {
 } from '@/lib/domain/boms';
 import { createItem } from '@/lib/domain/items';
 import {
+  testAuditActor,
   createTestCompany,
   resetTestDatabase,
   testDatabaseClient,
@@ -31,7 +32,7 @@ describe('Item and versioned BOM domain', () => {
         standardPrice: '1.25',
         costPrice: '0.50',
       },
-      testDatabaseClient,
+      testAuditActor(companyId), testDatabaseClient,
     );
   }
 
@@ -44,19 +45,19 @@ describe('Item and versioned BOM domain', () => {
     const bomWithDraftRevision = await createBom(
       companyId,
       { code: `BOM-${bomCode}`, name: `${bomCode} BOM`, outputItemId },
-      testDatabaseClient,
+      testAuditActor(companyId), testDatabaseClient,
     );
     const draftBomRevision = bomWithDraftRevision.versions[0];
     await replaceDraftBomComponents(
       companyId,
       draftBomRevision.id,
       componentInputs,
-      testDatabaseClient,
+      testAuditActor(companyId), testDatabaseClient,
     );
     return activateBomRevision(
       companyId,
       draftBomRevision.id,
-      testDatabaseClient,
+      testAuditActor(companyId), testDatabaseClient,
     );
   }
 
@@ -124,19 +125,19 @@ describe('Item and versioned BOM domain', () => {
     const selfReferencingBom = await createBom(
       company.id,
       { code: 'BOM-SELF', name: 'Self', outputItemId: selfReferencingItem.id },
-      testDatabaseClient,
+      testAuditActor(company.id), testDatabaseClient,
     );
     await replaceDraftBomComponents(
       company.id,
       selfReferencingBom.versions[0].id,
       [{ itemId: selfReferencingItem.id, quantity: '1' }],
-      testDatabaseClient,
+      testAuditActor(company.id), testDatabaseClient,
     );
     await expect(
       activateBomRevision(
         company.id,
         selfReferencingBom.versions[0].id,
-        testDatabaseClient,
+        testAuditActor(company.id), testDatabaseClient,
       ),
     ).rejects.toMatchObject({ code: 'BOM_CYCLE' });
 
@@ -156,19 +157,19 @@ describe('Item and versioned BOM domain', () => {
     const finishedGoodXBom = await createBom(
       company.id,
       { code: 'BOM-X', name: 'X', outputItemId: finishedGoodX.id },
-      testDatabaseClient,
+      testAuditActor(company.id), testDatabaseClient,
     );
     await replaceDraftBomComponents(
       company.id,
       finishedGoodXBom.versions[0].id,
       [{ itemId: componentY.id, quantity: '1' }],
-      testDatabaseClient,
+      testAuditActor(company.id), testDatabaseClient,
     );
     await expect(
       activateBomRevision(
         company.id,
         finishedGoodXBom.versions[0].id,
-        testDatabaseClient,
+        testAuditActor(company.id), testDatabaseClient,
       ),
     ).rejects.toMatchObject({ code: 'BOM_CYCLE' });
   });
@@ -185,7 +186,7 @@ describe('Item and versioned BOM domain', () => {
           itemType: ItemType.SERVICE,
           trackInventory: true,
         },
-        testDatabaseClient,
+        testAuditActor(company.id), testDatabaseClient,
       ),
     ).rejects.toMatchObject({ code: 'SERVICE_INVENTORY_NOT_ALLOWED' });
     const outputItem = await createTestItem(
@@ -201,7 +202,7 @@ describe('Item and versioned BOM domain', () => {
         itemType: ItemType.SERVICE,
         trackInventory: false,
       },
-      testDatabaseClient,
+      testAuditActor(company.id), testDatabaseClient,
     );
     const foreignCompanyComponent = await createTestItem(
       otherCompany.id,
@@ -211,14 +212,14 @@ describe('Item and versioned BOM domain', () => {
     const outputBomWithDraftRevision = await createBom(
       company.id,
       { code: 'BOM-OUTPUT', name: 'Output', outputItemId: outputItem.id },
-      testDatabaseClient,
+      testAuditActor(company.id), testDatabaseClient,
     );
     await expect(
       replaceDraftBomComponents(
         company.id,
         outputBomWithDraftRevision.versions[0].id,
         [{ itemId: serviceItem.id, quantity: '1' }],
-        testDatabaseClient,
+        testAuditActor(company.id), testDatabaseClient,
       ),
     ).rejects.toMatchObject({ code: 'INVALID_BOM_COMPONENT' });
     await expect(
@@ -226,14 +227,14 @@ describe('Item and versioned BOM domain', () => {
         company.id,
         outputBomWithDraftRevision.versions[0].id,
         [{ itemId: foreignCompanyComponent.id, quantity: '1' }],
-        testDatabaseClient,
+        testAuditActor(company.id), testDatabaseClient,
       ),
     ).rejects.toMatchObject({ code: 'INVALID_BOM_COMPONENT' });
     await expect(
       createBom(
         company.id,
         { code: 'BOM-SERVICE', name: 'Service', outputItemId: serviceItem.id },
-        testDatabaseClient,
+        testAuditActor(company.id), testDatabaseClient,
       ),
     ).rejects.toMatchObject({ code: 'INVALID_BOM_OUTPUT' });
   });
@@ -261,7 +262,7 @@ describe('Item and versioned BOM domain', () => {
         company.id,
         activeBomRevision.id,
         [{ itemId: rawMaterial.id, quantity: '3' }],
-        testDatabaseClient,
+        testAuditActor(company.id), testDatabaseClient,
       ),
     ).rejects.toMatchObject({ code: 'BOM_REVISION_IMMUTABLE' });
     const immutableBomComponent =

@@ -14,6 +14,7 @@
     "test:watch": "vitest",
     "auth:set-password": "node --import tsx scripts/set-user-password.ts",
     "auth:cleanup": "node --import tsx scripts/cleanup-auth.ts",
+    "audit:coverage": "node --import tsx scripts/audit-coverage.ts",
     "db:fingerprint": "node --import tsx scripts/database-fingerprint.ts",
     "db:migrate": "prisma migrate deploy",
     "db:migrate:dev": "prisma migrate dev",

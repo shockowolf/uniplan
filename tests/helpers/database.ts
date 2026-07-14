@@ -2,8 +2,13 @@ import { PrismaClient } from '@prisma/client';
 
 export const testDatabaseClient = new PrismaClient();
 
-const TEST_SCHEMA = 'uniplan_test_u9';
-const TEST_GUARD = 'uniplan_test_u9_only';
+const TEST_SCHEMA = 'uniplan_test_u10';
+const TEST_GUARD = 'uniplan_test_u10_only';
+
+const auditActorByCompanyId = new Map<
+  string,
+  { companyId: string; actorUserId: string }
+>();
 
 export async function assertDisposableTestSchema() {
   if (
@@ -27,6 +32,7 @@ export async function resetTestDatabase() {
   await testDatabaseClient.$executeRawUnsafe(`
     TRUNCATE TABLE
       "login_rate_limit_buckets",
+      "audit_events",
       "auth_sessions",
       "inventory_entries", "inventory_transactions", "inventory_balances",
       "bom_components", "bom_versions", "boms", "warehouses", "items", "item_categories",
@@ -38,7 +44,27 @@ export async function resetTestDatabase() {
 }
 
 export async function createTestCompany(companyCode: string) {
-  return testDatabaseClient.company.create({
+  const company = await testDatabaseClient.company.create({
     data: { code: companyCode, name: `${companyCode} Company` },
   });
+  const auditUser = await testDatabaseClient.user.create({
+    data: {
+      companyId: company.id,
+      email: `audit-${company.id}@test.invalid`,
+      passwordHash: 'test-only',
+      name: 'Test Audit Actor',
+    },
+  });
+  const auditActor = {
+    companyId: company.id,
+    actorUserId: auditUser.id,
+  } as const;
+  auditActorByCompanyId.set(company.id, auditActor);
+  return { ...company, auditActor };
+}
+
+export function testAuditActor(companyId: string) {
+  const actor = auditActorByCompanyId.get(companyId);
+  if (!actor) throw new Error(`No test audit actor for company ${companyId}.`);
+  return actor;
 }

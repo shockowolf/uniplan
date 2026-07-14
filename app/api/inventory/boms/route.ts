@@ -7,9 +7,11 @@ import {
   requiredString,
 } from '@/lib/api/responses';
 import { authorizeRequest } from '@/lib/auth/request';
+import { auditContextFromSession } from '@/lib/audit/service.server';
 import { prisma } from '@/lib/db';
 import {
   activateBomRevision,
+  activateBom,
   createBom,
   createDraftBomRevision,
   deactivateBom,
@@ -112,10 +114,12 @@ export async function POST(request: Request) {
       'create',
     );
     const requestBody = await readJsonObject(request);
+    const actor = auditContextFromSession(sessionContext);
     if (requestBody.action === 'draftRevision') {
       const bomVersion = await createDraftBomRevision(
         sessionContext.companyId,
         requiredString(requestBody.bomId, 'bomId'),
+        actor,
         optionalNullableString(requestBody.notes),
       );
       return apiSuccess({ bomVersion }, 201);
@@ -125,7 +129,7 @@ export async function POST(request: Request) {
       name: requiredString(requestBody.name, 'name'),
       outputItemId: requiredString(requestBody.outputItemId, 'outputItemId'),
       notes: optionalNullableString(requestBody.notes),
-    });
+    }, actor);
     return apiSuccess({ bom }, 201);
   } catch (requestError) {
     return apiError(requestError);
@@ -145,12 +149,14 @@ export async function PATCH(request: Request) {
     );
     if (!requestBody) throw new Error('Authorized request body is unavailable');
     const action = optionalString(requestBody.action) ?? 'update';
+    const actor = auditContextFromSession(sessionContext);
     const isDeactivation = action === 'deactivate';
     if (action === 'components') {
       const bomVersion = await replaceDraftBomComponents(
         sessionContext.companyId,
         requiredString(requestBody.versionId, 'versionId'),
         parseComponents(requestBody.components),
+        actor,
       );
       return apiSuccess({ bomVersion });
     }
@@ -158,6 +164,7 @@ export async function PATCH(request: Request) {
       const bomVersion = await activateBomRevision(
         sessionContext.companyId,
         requiredString(requestBody.versionId, 'versionId'),
+        actor,
       );
       return apiSuccess({ bomVersion });
     }
@@ -165,18 +172,23 @@ export async function PATCH(request: Request) {
       const bomVersion = await retireBomRevision(
         sessionContext.companyId,
         requiredString(requestBody.versionId, 'versionId'),
+        actor,
       );
       return apiSuccess({ bomVersion });
     }
     const bomId = requiredString(requestBody.bomId, 'bomId');
     if (isDeactivation) {
-      const bom = await deactivateBom(sessionContext.companyId, bomId);
+      const bom = await deactivateBom(sessionContext.companyId, bomId, actor);
+      return apiSuccess({ bom });
+    }
+    if (action === 'activateBom') {
+      const bom = await activateBom(sessionContext.companyId, bomId, actor);
       return apiSuccess({ bom });
     }
     const bom = await updateBom(sessionContext.companyId, bomId, {
       code: optionalString(requestBody.code),
       name: optionalString(requestBody.name),
-    });
+    }, actor);
     return apiSuccess({ bom });
   } catch (requestError) {
     return apiError(requestError);

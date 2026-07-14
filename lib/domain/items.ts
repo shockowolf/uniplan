@@ -1,6 +1,10 @@
 import { ItemType, Prisma, type PrismaClient } from '@prisma/client';
 import { prisma } from '@/lib/db';
 import {
+  recordMutationAuditEvent,
+  type TrustedMutationActor,
+} from '@/lib/audit/service.server';
+import {
   type CompanyMutationOptions,
   withCompanyMutationTransaction,
 } from '@/lib/domain/concurrency';
@@ -72,6 +76,7 @@ async function requireActiveItemCategory(
 export async function createItem(
   companyId: string,
   input: ItemInput,
+  actor: TrustedMutationActor,
   databaseClient: PrismaClient = prisma,
   transactionOptions: CompanyMutationOptions = {},
 ) {
@@ -87,7 +92,7 @@ export async function createItem(
         input.categoryId,
         databaseTransaction,
       );
-      return databaseTransaction.item.create({
+      const item = await databaseTransaction.item.create({
         data: {
           companyId,
           code: normalizeRequiredText(input.code, 'code'),
@@ -106,6 +111,14 @@ export async function createItem(
           memo: input.memo?.trim() || null,
         },
       });
+      await recordMutationAuditEvent(
+        databaseTransaction,
+        companyId,
+        actor,
+        { action: 'item.created', resourceType: 'item', resourceId: item.id },
+        transactionOptions.auditHooks,
+      );
+      return item;
     },
     transactionOptions,
   );
@@ -115,6 +128,7 @@ export async function updateItem(
   companyId: string,
   itemId: string,
   input: Partial<ItemInput>,
+  actor: TrustedMutationActor,
   databaseClient: PrismaClient = prisma,
   transactionOptions: CompanyMutationOptions = {},
 ) {
@@ -155,7 +169,7 @@ export async function updateItem(
         );
       }
 
-      return databaseTransaction.item.update({
+      const item = await databaseTransaction.item.update({
         where: { id: itemId, companyId },
         data: {
           ...(input.code !== undefined
@@ -192,6 +206,14 @@ export async function updateItem(
             : {}),
         },
       });
+      await recordMutationAuditEvent(
+        databaseTransaction,
+        companyId,
+        actor,
+        { action: 'item.updated', resourceType: 'item', resourceId: item.id },
+        transactionOptions.auditHooks,
+      );
+      return item;
     },
     transactionOptions,
   );
@@ -200,6 +222,7 @@ export async function updateItem(
 export async function deactivateItem(
   companyId: string,
   itemId: string,
+  actor: TrustedMutationActor,
   databaseClient: PrismaClient = prisma,
   transactionOptions: CompanyMutationOptions = {},
 ) {
@@ -247,10 +270,18 @@ export async function deactivateItem(
           'ITEM_USED_BY_ACTIVE_BOM',
         );
       }
-      return databaseTransaction.item.update({
+      const item = await databaseTransaction.item.update({
         where: { id: itemId, companyId },
         data: { active: false },
       });
+      await recordMutationAuditEvent(
+        databaseTransaction,
+        companyId,
+        actor,
+        { action: 'item.deactivated', resourceType: 'item', resourceId: item.id },
+        transactionOptions.auditHooks,
+      );
+      return item;
     },
     transactionOptions,
   );
@@ -264,6 +295,7 @@ export async function createItemCategory(
     parentId?: string | null;
     description?: string | null;
   },
+  actor: TrustedMutationActor,
   databaseClient: PrismaClient = prisma,
   transactionOptions: CompanyMutationOptions = {},
 ) {
@@ -284,7 +316,7 @@ export async function createItemCategory(
           );
         }
       }
-      return databaseTransaction.itemCategory.create({
+      const category = await databaseTransaction.itemCategory.create({
         data: {
           companyId,
           code: normalizeRequiredText(input.code, 'code'),
@@ -293,6 +325,18 @@ export async function createItemCategory(
           description: input.description?.trim() || null,
         },
       });
+      await recordMutationAuditEvent(
+        databaseTransaction,
+        companyId,
+        actor,
+        {
+          action: 'item_category.created',
+          resourceType: 'item_category',
+          resourceId: category.id,
+        },
+        transactionOptions.auditHooks,
+      );
+      return category;
     },
     transactionOptions,
   );
@@ -301,6 +345,7 @@ export async function createItemCategory(
 export async function deactivateItemCategory(
   companyId: string,
   categoryId: string,
+  actor: TrustedMutationActor,
   databaseClient: PrismaClient = prisma,
   transactionOptions: CompanyMutationOptions = {},
 ) {
@@ -323,10 +368,22 @@ export async function deactivateItemCategory(
           'ITEM_CATEGORY_NOT_EMPTY',
         );
       }
-      return databaseTransaction.itemCategory.update({
+      const category = await databaseTransaction.itemCategory.update({
         where: { id: categoryId, companyId },
         data: { active: false },
       });
+      await recordMutationAuditEvent(
+        databaseTransaction,
+        companyId,
+        actor,
+        {
+          action: 'item_category.deactivated',
+          resourceType: 'item_category',
+          resourceId: category.id,
+        },
+        transactionOptions.auditHooks,
+      );
+      return category;
     },
     transactionOptions,
   );
@@ -341,6 +398,7 @@ export async function updateItemCategory(
     parentId?: string | null;
     description?: string | null;
   },
+  actor: TrustedMutationActor,
   databaseClient: PrismaClient = prisma,
   transactionOptions: CompanyMutationOptions = {},
 ) {
@@ -385,7 +443,7 @@ export async function updateItemCategory(
           ancestorCategoryId = ancestorCategory.parentId;
         }
       }
-      return databaseTransaction.itemCategory.update({
+      const category = await databaseTransaction.itemCategory.update({
         where: { id: categoryId, companyId },
         data: {
           ...(input.code !== undefined
@@ -400,6 +458,105 @@ export async function updateItemCategory(
             : {}),
         },
       });
+      await recordMutationAuditEvent(
+        databaseTransaction,
+        companyId,
+        actor,
+        {
+          action: 'item_category.updated',
+          resourceType: 'item_category',
+          resourceId: category.id,
+        },
+        transactionOptions.auditHooks,
+      );
+      return category;
+    },
+    transactionOptions,
+  );
+}
+
+export async function activateItem(
+  companyId: string,
+  itemId: string,
+  actor: TrustedMutationActor,
+  databaseClient: PrismaClient = prisma,
+  transactionOptions: CompanyMutationOptions = {},
+) {
+  return withCompanyMutationTransaction(
+    companyId,
+    databaseClient,
+    async (databaseTransaction) => {
+      const existingItem = await databaseTransaction.item.findFirst({
+        where: { id: itemId, companyId },
+        select: { id: true, categoryId: true },
+      });
+      if (!existingItem) throw new NotFoundError('Item not found');
+      await requireActiveItemCategory(
+        companyId,
+        existingItem.categoryId,
+        databaseTransaction,
+      );
+      const item = await databaseTransaction.item.update({
+        where: { id: itemId, companyId },
+        data: { active: true },
+      });
+      await recordMutationAuditEvent(
+        databaseTransaction,
+        companyId,
+        actor,
+        { action: 'item.activated', resourceType: 'item', resourceId: item.id },
+        transactionOptions.auditHooks,
+      );
+      return item;
+    },
+    transactionOptions,
+  );
+}
+
+export async function activateItemCategory(
+  companyId: string,
+  categoryId: string,
+  actor: TrustedMutationActor,
+  databaseClient: PrismaClient = prisma,
+  transactionOptions: CompanyMutationOptions = {},
+) {
+  return withCompanyMutationTransaction(
+    companyId,
+    databaseClient,
+    async (databaseTransaction) => {
+      const existingCategory = await databaseTransaction.itemCategory.findFirst({
+        where: { id: categoryId, companyId },
+        select: { id: true, parentId: true },
+      });
+      if (!existingCategory) throw new NotFoundError('Item category not found');
+      if (existingCategory.parentId) {
+        const parent = await databaseTransaction.itemCategory.findFirst({
+          where: { id: existingCategory.parentId, companyId, active: true },
+          select: { id: true },
+        });
+        if (!parent) {
+          throw new ValidationError(
+            'Parent category must be active and belong to the same company',
+            'INVALID_PARENT_CATEGORY',
+          );
+        }
+      }
+      const category = await databaseTransaction.itemCategory.update({
+        where: { id: categoryId, companyId },
+        data: { active: true },
+      });
+      await recordMutationAuditEvent(
+        databaseTransaction,
+        companyId,
+        actor,
+        {
+          action: 'item_category.activated',
+          resourceType: 'item_category',
+          resourceId: category.id,
+        },
+        transactionOptions.auditHooks,
+      );
+      return category;
     },
     transactionOptions,
   );

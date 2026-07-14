@@ -8,6 +8,7 @@ import {
   requiredString,
 } from '@/lib/api/responses';
 import { authorizeRequest } from '@/lib/auth/request';
+import { auditContextFromSession } from '@/lib/audit/service.server';
 import { prisma } from '@/lib/db';
 import { ValidationError } from '@/lib/domain/errors';
 import { postInventoryTransaction } from '@/lib/domain/inventory';
@@ -42,23 +43,20 @@ function parseQuantity(value: unknown, fieldName = 'quantity') {
 
 function commonPostingFields(
   requestBody: Record<string, unknown>,
-  createdById: string,
 ) {
   return {
     idempotencyKey: requiredString(requestBody.idempotencyKey, 'idempotencyKey'),
     occurredAt: optionalString(requestBody.occurredAt),
     reference: optionalNullableString(requestBody.reference),
     memo: optionalNullableString(requestBody.memo),
-    createdById,
   };
 }
 
 function buildPostingInput(
   requestBody: Record<string, unknown>,
-  createdById: string,
 ): PostInventoryTransactionInput {
   const transactionType = parseTransactionType(requestBody.type);
-  const commonFields = commonPostingFields(requestBody, createdById);
+  const commonFields = commonPostingFields(requestBody);
   if (transactionType === 'PRODUCTION') {
     return {
       ...commonFields,
@@ -222,7 +220,8 @@ export async function POST(request: Request) {
     const requestBody = await readJsonObject(request);
     const inventoryTransaction = await postInventoryTransaction(
       sessionContext.companyId,
-      buildPostingInput(requestBody, sessionContext.userId),
+      buildPostingInput(requestBody),
+      auditContextFromSession(sessionContext),
     );
     return apiSuccess({ inventoryTransaction }, 201);
   } catch (requestError) {

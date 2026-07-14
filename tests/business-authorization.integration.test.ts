@@ -21,6 +21,7 @@ import {
   updateSafetyQuantity,
 } from '@/lib/domain/inventory';
 import {
+  testAuditActor,
   createTestCompany,
   resetTestDatabase,
   testDatabaseClient,
@@ -133,7 +134,7 @@ describe('U7 business API session authorization and tenant scope', () => {
     await createItem(
       tenant.company.id,
       { code: 'OWN-ITEM', name: 'Own Item', itemType: ItemType.RAW_MATERIAL },
-      testDatabaseClient,
+      testAuditActor(tenant.company.id), testDatabaseClient,
     );
 
     const response = await getItemsRequest(
@@ -248,7 +249,7 @@ describe('U7 business API session authorization and tenant scope', () => {
         name: 'Foreign Material',
         itemType: ItemType.RAW_MATERIAL,
       },
-      testDatabaseClient,
+      testAuditActor(tenantB.company.id), testDatabaseClient,
     );
     const foreignOutput = await createItem(
       tenantB.company.id,
@@ -257,7 +258,7 @@ describe('U7 business API session authorization and tenant scope', () => {
         name: 'Foreign Output',
         itemType: ItemType.FINISHED_GOOD,
       },
-      testDatabaseClient,
+      testAuditActor(tenantB.company.id), testDatabaseClient,
     );
     const foreignBom = await createBom(
       tenantB.company.id,
@@ -266,18 +267,18 @@ describe('U7 business API session authorization and tenant scope', () => {
         name: 'Foreign BOM',
         outputItemId: foreignOutput.id,
       },
-      testDatabaseClient,
+      testAuditActor(tenantB.company.id), testDatabaseClient,
     );
     await replaceDraftBomComponents(
       tenantB.company.id,
       foreignBom.versions[0].id,
       [{ itemId: foreignMaterial.id, quantity: '1' }],
-      testDatabaseClient,
+      testAuditActor(tenantB.company.id), testDatabaseClient,
     );
     const foreignVersion = await activateBomRevision(
       tenantB.company.id,
       foreignBom.versions[0].id,
-      testDatabaseClient,
+      testAuditActor(tenantB.company.id), testDatabaseClient,
     );
 
     const response = await getBomsRequest(
@@ -310,7 +311,7 @@ describe('U7 business API session authorization and tenant scope', () => {
         name: 'Original Foreign Name',
         itemType: ItemType.RAW_MATERIAL,
       },
-      testDatabaseClient,
+      testAuditActor(tenantB.company.id), testDatabaseClient,
     );
 
     const response = await updateItemRequest(
@@ -350,12 +351,12 @@ describe('U7 business API session authorization and tenant scope', () => {
         name: 'Receipt Item',
         itemType: ItemType.RAW_MATERIAL,
       },
-      testDatabaseClient,
+      testAuditActor(tenantA.company.id), testDatabaseClient,
     );
     const warehouse = await createWarehouse(
       tenantA.company.id,
       { code: 'MAIN', name: 'Main' },
-      testDatabaseClient,
+      testAuditActor(tenantA.company.id), testDatabaseClient,
     );
 
     const response = await postInventoryRequest(
@@ -434,12 +435,12 @@ describe('U7 business API session authorization and tenant scope', () => {
       createItem(
         tenantA.company.id,
         { code: 'ONLY-A', name: 'Only A', itemType: ItemType.RAW_MATERIAL },
-        testDatabaseClient,
+        testAuditActor(tenantA.company.id), testDatabaseClient,
       ),
       createItem(
         tenantB.company.id,
         { code: 'ONLY-B', name: 'Only B', itemType: ItemType.RAW_MATERIAL },
-        testDatabaseClient,
+        testAuditActor(tenantB.company.id), testDatabaseClient,
       ),
     ]);
 
@@ -481,7 +482,7 @@ describe('U7 business API session authorization and tenant scope', () => {
           name: 'AI Tenant A Item',
           itemType: ItemType.RAW_MATERIAL,
         },
-        testDatabaseClient,
+        testAuditActor(tenantA.company.id), testDatabaseClient,
       ),
       createItem(
         tenantB.company.id,
@@ -490,17 +491,17 @@ describe('U7 business API session authorization and tenant scope', () => {
           name: 'AI Tenant B Item',
           itemType: ItemType.RAW_MATERIAL,
         },
-        testDatabaseClient,
+        testAuditActor(tenantB.company.id), testDatabaseClient,
       ),
       createWarehouse(
         tenantA.company.id,
         { code: 'AI-WH-A', name: 'AI Warehouse A' },
-        testDatabaseClient,
+        testAuditActor(tenantA.company.id), testDatabaseClient,
       ),
       createWarehouse(
         tenantB.company.id,
         { code: 'AI-WH-B', name: 'AI Warehouse B' },
-        testDatabaseClient,
+        testAuditActor(tenantB.company.id), testDatabaseClient,
       ),
     ]);
     await Promise.all([
@@ -509,24 +510,22 @@ describe('U7 business API session authorization and tenant scope', () => {
         {
           type: 'RECEIPT',
           idempotencyKey: 'u7-ai-a-opening',
-          createdById: tenantA.user.id,
           lines: [
             { itemId: itemA.id, warehouseId: warehouseA.id, quantity: 1 },
           ],
         },
-        { db: testDatabaseClient },
+        testAuditActor(tenantA.company.id), { db: testDatabaseClient },
       ),
       postInventoryTransaction(
         tenantB.company.id,
         {
           type: 'RECEIPT',
           idempotencyKey: 'u7-ai-b-opening',
-          createdById: tenantB.user.id,
           lines: [
             { itemId: itemB.id, warehouseId: warehouseB.id, quantity: 1 },
           ],
         },
-        { db: testDatabaseClient },
+        testAuditActor(tenantB.company.id), { db: testDatabaseClient },
       ),
     ]);
     const [balanceA, balanceB] = await Promise.all([
@@ -554,13 +553,13 @@ describe('U7 business API session authorization and tenant scope', () => {
         tenantA.company.id,
         balanceA.id,
         5,
-        testDatabaseClient,
+        testAuditActor(tenantA.company.id), testDatabaseClient,
       ),
       updateSafetyQuantity(
         tenantB.company.id,
         balanceB.id,
         5,
-        testDatabaseClient,
+        testAuditActor(tenantB.company.id), testDatabaseClient,
       ),
     ]);
 

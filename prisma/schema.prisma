@@ -31,6 +31,14 @@ enum InventoryTransactionType {
   REVERSAL
 }
 
+enum AuditOutcome {
+  SUCCEEDED @map("succeeded")
+  DENIED    @map("denied")
+  FAILED    @map("failed")
+
+  @@map("audit_outcome")
+}
+
 model Company {
   id        String   @id @default(cuid())
   code      String   @unique
@@ -56,6 +64,7 @@ model Company {
   invoices              Invoice[]
   consultations         Consultation[]
   serviceCases          ServiceCase[]
+  auditEvents           AuditEvent[]
 
   @@map("companies")
 }
@@ -76,11 +85,37 @@ model User {
   userRoles             UserRole[]
   authSessions          AuthSession[]
   inventoryTransactions InventoryTransaction[] @relation("InventoryTransactionCreator")
+  auditEvents           AuditEvent[]           @relation("AuditEventActor")
 
   @@unique([companyId, email])
   @@unique([companyId, id])
   @@index([companyId, status])
   @@map("users")
+}
+
+model AuditEvent {
+  id                 String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  companyId          String
+  actorUserId        String?
+  action             String       @db.VarChar(80)
+  resourceType       String       @db.VarChar(64)
+  resourceId         String?      @db.VarChar(128)
+  outcome            AuditOutcome
+  correlationHash    String?      @db.Char(64)
+  idempotencyKeyHash String?      @db.Char(64)
+  subjectHash        String?      @db.Char(64)
+  metadata           Json         @default("{}")
+  createdAt          DateTime     @default(now())
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  actor   User?   @relation("AuditEventActor", fields: [companyId, actorUserId], references: [companyId, id], onDelete: NoAction)
+
+  @@unique([companyId, action, idempotencyKeyHash])
+  @@index([companyId, createdAt, id])
+  @@index([companyId, action, createdAt])
+  @@index([companyId, resourceType, resourceId, createdAt])
+  @@index([companyId, outcome, createdAt])
+  @@map("audit_events")
 }
 
 model AuthSession {

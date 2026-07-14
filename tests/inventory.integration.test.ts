@@ -11,6 +11,7 @@ import {
   reconcileInventory,
 } from '@/lib/domain/inventory';
 import {
+  testAuditActor,
   createTestCompany,
   resetTestDatabase,
   testDatabaseClient,
@@ -31,7 +32,7 @@ describe('atomic warehouse inventory ledger', () => {
     const inventoryItem = await createItem(
       company.id,
       { code: 'ITEM', name: 'Item', itemType: ItemType.RAW_MATERIAL },
-      testDatabaseClient,
+      testAuditActor(company.id), testDatabaseClient,
     );
     return { company, mainWarehouse, secondaryWarehouse, inventoryItem };
   }
@@ -65,7 +66,7 @@ describe('atomic warehouse inventory ledger', () => {
           },
         ],
       },
-      { db: testDatabaseClient },
+      testAuditActor(company.id), { db: testDatabaseClient },
     );
     const issueTransaction = await postInventoryTransaction(
       company.id,
@@ -80,7 +81,7 @@ describe('atomic warehouse inventory ledger', () => {
           },
         ],
       },
-      { db: testDatabaseClient },
+      testAuditActor(company.id), { db: testDatabaseClient },
     );
     const transferTransaction = await postInventoryTransaction(
       company.id,
@@ -96,7 +97,7 @@ describe('atomic warehouse inventory ledger', () => {
           },
         ],
       },
-      { db: testDatabaseClient },
+      testAuditActor(company.id), { db: testDatabaseClient },
     );
     await postInventoryTransaction(
       company.id,
@@ -111,7 +112,7 @@ describe('atomic warehouse inventory ledger', () => {
           },
         ],
       },
-      { db: testDatabaseClient },
+      testAuditActor(company.id), { db: testDatabaseClient },
     );
     const reversalTransaction = await postInventoryTransaction(
       company.id,
@@ -120,7 +121,7 @@ describe('atomic warehouse inventory ledger', () => {
         idempotencyKey: 'reverse-issue',
         originalTransactionId: issueTransaction.id,
       },
-      { db: testDatabaseClient },
+      testAuditActor(company.id), { db: testDatabaseClient },
     );
 
     expect(
@@ -160,7 +161,7 @@ describe('atomic warehouse inventory ledger', () => {
             },
           ],
         },
-        { db: testDatabaseClient },
+        testAuditActor(company.id), { db: testDatabaseClient },
       ),
     ).rejects.toMatchObject({ code: 'INSUFFICIENT_STOCK' });
     expect(
@@ -188,7 +189,7 @@ describe('atomic warehouse inventory ledger', () => {
             },
           ],
         },
-        {
+        testAuditActor(company.id), {
           db: testDatabaseClient,
           hooks: {
             afterEntries: async () => {
@@ -232,12 +233,12 @@ describe('atomic warehouse inventory ledger', () => {
     const firstPosting = await postInventoryTransaction(
       firstTenantContext.company.id,
       receiptRequest,
-      { db: testDatabaseClient },
+      testAuditActor(firstTenantContext.company.id), { db: testDatabaseClient },
     );
     const idempotentReplay = await postInventoryTransaction(
       firstTenantContext.company.id,
       receiptRequest,
-      { db: testDatabaseClient },
+      testAuditActor(firstTenantContext.company.id), { db: testDatabaseClient },
     );
     expect(idempotentReplay.id).toBe(firstPosting.id);
     await expect(
@@ -247,7 +248,7 @@ describe('atomic warehouse inventory ledger', () => {
           ...receiptRequest,
           lines: [{ ...receiptRequest.lines[0], quantity: '3' }],
         },
-        { db: testDatabaseClient },
+        testAuditActor(firstTenantContext.company.id), { db: testDatabaseClient },
       ),
     ).rejects.toMatchObject({ code: 'IDEMPOTENCY_PAYLOAD_CONFLICT' });
     await expect(
@@ -264,7 +265,7 @@ describe('atomic warehouse inventory ledger', () => {
             },
           ],
         },
-        { db: testDatabaseClient },
+        testAuditActor(secondTenantContext.company.id), { db: testDatabaseClient },
       ),
     ).resolves.toMatchObject({ idempotencyKey: 'same-key' });
   });
@@ -287,7 +288,7 @@ describe('atomic warehouse inventory ledger', () => {
               },
             ],
           },
-          { db: testDatabaseClient, maxAttempts: 6 },
+          testAuditActor(company.id), { db: testDatabaseClient, maxAttempts: 6 },
         ),
       ),
     );
@@ -309,7 +310,7 @@ describe('atomic warehouse inventory ledger', () => {
               },
             ],
           },
-          { db: testDatabaseClient, maxAttempts: 6 },
+          testAuditActor(company.id), { db: testDatabaseClient, maxAttempts: 6 },
         ),
       ),
     );
@@ -331,43 +332,43 @@ describe('atomic warehouse inventory ledger', () => {
     const rawMaterialA = await createItem(
       company.id,
       { code: 'RAW-A', name: 'Raw A', itemType: ItemType.RAW_MATERIAL },
-      testDatabaseClient,
+      testAuditActor(company.id), testDatabaseClient,
     );
     const rawMaterialB = await createItem(
       company.id,
       { code: 'RAW-B', name: 'Raw B', itemType: ItemType.RAW_MATERIAL },
-      testDatabaseClient,
+      testAuditActor(company.id), testDatabaseClient,
     );
     const subassemblyItem = await createItem(
       company.id,
       { code: 'SUB', name: 'Sub', itemType: ItemType.COMPONENT },
-      testDatabaseClient,
+      testAuditActor(company.id), testDatabaseClient,
     );
     const finishedGood = await createItem(
       company.id,
       { code: 'FINISHED', name: 'Finished', itemType: ItemType.FINISHED_GOOD },
-      testDatabaseClient,
+      testAuditActor(company.id), testDatabaseClient,
     );
     const subassemblyBom = await createBom(
       company.id,
       { code: 'BOM-SUB', name: 'Sub', outputItemId: subassemblyItem.id },
-      testDatabaseClient,
+      testAuditActor(company.id), testDatabaseClient,
     );
     await replaceDraftBomComponents(
       company.id,
       subassemblyBom.versions[0].id,
       [{ itemId: rawMaterialA.id, quantity: '2' }],
-      testDatabaseClient,
+      testAuditActor(company.id), testDatabaseClient,
     );
     await activateBomRevision(
       company.id,
       subassemblyBom.versions[0].id,
-      testDatabaseClient,
+      testAuditActor(company.id), testDatabaseClient,
     );
     const finishedGoodBom = await createBom(
       company.id,
       { code: 'BOM-FINISHED', name: 'Finished', outputItemId: finishedGood.id },
-      testDatabaseClient,
+      testAuditActor(company.id), testDatabaseClient,
     );
     await replaceDraftBomComponents(
       company.id,
@@ -376,12 +377,12 @@ describe('atomic warehouse inventory ledger', () => {
         { itemId: subassemblyItem.id, quantity: '1' },
         { itemId: rawMaterialB.id, quantity: '1' },
       ],
-      testDatabaseClient,
+      testAuditActor(company.id), testDatabaseClient,
     );
     const activeFinishedGoodBomRevision = await activateBomRevision(
       company.id,
       finishedGoodBom.versions[0].id,
-      testDatabaseClient,
+      testAuditActor(company.id), testDatabaseClient,
     );
     await postInventoryTransaction(
       company.id,
@@ -401,7 +402,7 @@ describe('atomic warehouse inventory ledger', () => {
           },
         ],
       },
-      { db: testDatabaseClient },
+      testAuditActor(company.id), { db: testDatabaseClient },
     );
     const productionTransaction = await postInventoryTransaction(
       company.id,
@@ -413,7 +414,7 @@ describe('atomic warehouse inventory ledger', () => {
         componentWarehouseId: productionWarehouse.id,
         outputWarehouseId: productionWarehouse.id,
       },
-      { db: testDatabaseClient },
+      testAuditActor(company.id), { db: testDatabaseClient },
     );
     expect(productionTransaction.bomVersionId).toBe(
       activeFinishedGoodBomRevision.id,
@@ -443,7 +444,7 @@ describe('atomic warehouse inventory ledger', () => {
           componentWarehouseId: productionWarehouse.id,
           outputWarehouseId: productionWarehouse.id,
         },
-        { db: testDatabaseClient },
+        testAuditActor(company.id), { db: testDatabaseClient },
       ),
     ).rejects.toMatchObject({ code: 'INSUFFICIENT_STOCK' });
     expect(
@@ -472,7 +473,7 @@ describe('atomic warehouse inventory ledger', () => {
           },
         ],
       },
-      { db: testDatabaseClient },
+      testAuditActor(company.id), { db: testDatabaseClient },
     );
     await expect(
       reconcileInventory(company.id, testDatabaseClient),
