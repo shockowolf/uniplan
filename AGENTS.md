@@ -1,27 +1,22 @@
-# AGENTS.md
+# Uniplan Agent Guide
 
-## Workspace
+Uniplan's shared source of truth covers product direction, data model, query templates, and the working Next.js prototype.
 
-- This workspace is `Uniplan`.
-- Treat this repository as the shared source of truth for Uniplan planning, data model, query templates, and the working Next.js prototype.
+## Read before changing code
 
-## Startup
+1. `README.md` and `UNIPLAN_MOVE_BRIEF.md`
+2. `UNIPLAN_MVP.md`, `UNIPLAN_ARCHITECTURE.md`, and `UNIPLAN_DATA_MODEL.md`
+3. `docs/EASIERP_DB_REFERENCE.md` when mapping legacy easiERP/gootzERP structures
+4. Relevant entry points: `app/page.tsx`, `app/api/chat/route.ts`, `lib/ai/orchestrator.ts`
 
-- Read `README.md` first.
-- Read `UNIPLAN_MOVE_BRIEF.md` before making changes.
-- Use `UNIPLAN_MVP.md`, `UNIPLAN_ARCHITECTURE.md`, and `UNIPLAN_DATA_MODEL.md` as the core product/technical context.
-- Use `docs/EASIERP_DB_REFERENCE.md` when mapping legacy easiERP/gootzERP database structures into Uniplan.
-- For implementation, start with `app/page.tsx`, `app/api/chat/route.ts`, and `lib/ai/orchestrator.ts`.
+## Hard boundaries
 
-## Working Rules
+- Keep implementation aligned with the canonical product documents; record durable direction changes in the relevant `UNIPLAN_*.md` file, not only in chat.
+- Never commit secrets, private credentials, raw production database dumps, or local runtime state.
+- AI data access stays template-based and read-only unless the user explicitly approves a new safety model.
+- Apply the shared durable-write and verification rules to persistent mutations, files, or external side effects; do not rely only on a client-side duplicate guard.
 
-- Keep product direction aligned with the docs when changing code.
-- Do not write secrets, private credentials, raw production database dumps, or local runtime state into the repository.
-- When updating direction or decisions, add the durable version to the relevant `UNIPLAN_*.md` file rather than relying on chat memory.
-- Keep AI data access template-based and read-only unless the user explicitly approves a new safety model.
+## Verification
 
-## Codex Cloud
-
-- Setup: `npm install`
-- Verify: `npm run verify:cloud`
-- Full local verification when dependencies/SQLite are available and a destructive demo DB reset is acceptable: `npm run db:reset && npm run build`
+- Cloud: `npm install && npm run verify:cloud`
+- Local, only when the SQLite demo database may be destructively reset: `npm run db:reset && npm run build`
